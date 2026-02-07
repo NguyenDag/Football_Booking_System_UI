@@ -1,0 +1,161 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+/* Modern Typography & Base Styles */
+* {
+  @apply transition-colors duration-200;
+}
+
+body {
+  @apply bg-gradient-to-b from-slate-50 to-slate-100;
+  font-feature-settings: "rlig" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Modern Shadows */
+:root {
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+}
+
+/* Smooth animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-custom {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 20px 0 rgba(16, 185, 129, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px 0 rgba(16, 185, 129, 0.5);
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-pulse-custom {
+  animation: pulse-custom 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Button Styles */
+button {
+  @apply font-semibold;
+}
+
+button:active {
+  @apply scale-95;
+}
+
+/* Card Hover Effects */
+.card-hover {
+  @apply hover:shadow-xl hover:scale-105 transition-all duration-300;
+}
+
+/* Gradient Text */
+.gradient-text {
+  @apply bg-gradient-to-r from-emerald-600 via-purple-600 to-emerald-600 bg-clip-text text-transparent;
+}
+
+/* Modern Input Styles */
+input, textarea, select {
+  @apply transition-all duration-200;
+}
+
+input:focus, textarea:focus, select:focus {
+  @apply ring-2 ring-emerald-400/30 border-emerald-400;
+}
+
+/* Loading spinner */
+@keyframes spin-custom {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  animation: spin-custom 1s linear infinite;
+}
+
+/* Youth-friendly Color Highlights */
+.accent-emerald {
+  @apply bg-gradient-to-r from-emerald-400 to-emerald-600;
+}
+
+.accent-purple {
+  @apply bg-gradient-to-r from-purple-400 to-purple-600;
+}
+
+/* Responsive Typography */
+@layer components {
+  .hero-title {
+    @apply text-3xl md:text-4xl lg:text-5xl font-bold;
+  }
+
+  .section-title {
+    @apply text-2xl md:text-3xl font-bold;
+  }
+
+  .card-title {
+    @apply text-lg md:text-xl font-bold;
+  }
+}
+
+/* Modern Badge Styles */
+.badge-modern {
+  @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-gradient-to-r shadow-md;
+}
+
+/* Smooth Link Transitions */
+a {
+  @apply transition-colors duration-200;
+}
+
+a:hover {
+  @apply text-emerald-600;
+}
+
+/* Modern Focus Styles */
+:focus-visible {
+  @apply outline-2 outline-emerald-500 outline-offset-2;
+}
