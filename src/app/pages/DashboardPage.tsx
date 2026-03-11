@@ -6,22 +6,40 @@ import { mockBookings, mockFields } from '../data/mockData';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Link } from 'react-router-dom';
+import { pitchService, Field as ApiField } from '../api/pitch.service';
 
 export function DashboardPage() {
   const { user } = useAuth();
+
+  const [fields, setFields] = React.useState<ApiField[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchFields = async () => {
+      try {
+        const data = await pitchService.getAllPitches();
+        setFields(data);
+      } catch (error) {
+        console.error('Failed to fetch fields for dashboard:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFields();
+  }, []);
 
   const stats = React.useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
 
     return {
-      totalFields: mockFields.filter(f => f.status === 'ACTIVE').length,
+      totalFields: fields.filter(f => f.status === 'ACTIVE').length,
       totalBookings: mockBookings.length,
       pendingBookings: mockBookings.filter(b => b.status === 'PENDING').length,
       confirmedBookings: mockBookings.filter(b => b.status === 'CONFIRMED').length,
       todayBookings: mockBookings.filter(b => b.date === today).length,
       completedBookings: mockBookings.filter(b => b.status === 'COMPLETED').length,
     };
-  }, []);
+  }, [fields]);
 
   const recentBookings = mockBookings.slice(0, 5);
 
@@ -105,7 +123,7 @@ export function DashboardPage() {
           <CardContent>
             <div className="space-y-3">
               {recentBookings.map((booking) => {
-                const field = mockFields.find(f => f.id === booking.fieldId);
+                const field = fields.find(f => f.id === booking.fieldId);
                 return (
                   <div key={booking.id} className="flex items-center justify-between p-4 border border-slate-200/50 rounded-xl hover:bg-slate-50/50 transition-colors">
                     <div className="space-y-1 flex-1">
@@ -138,9 +156,7 @@ export function DashboardPage() {
   }
 
   if (user?.role === 'STAFF') {
-    const staffBookings = mockBookings.filter(
-      b => user.assignedFields?.includes(b.fieldId)
-    );
+    const staffBookings = mockBookings; // Fallback: show all bookings for now as assignedFields is missing from API
     const pendingCount = staffBookings.filter(b => b.status === 'PENDING').length;
 
     return (
@@ -150,7 +166,7 @@ export function DashboardPage() {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-600 to-purple-600 bg-clip-text text-transparent">
             Dashboard Nhân viên
           </h1>
-          <p className="text-slate-600">Xin chào, {user.name}! 👋</p>
+          <p className="text-slate-600">Xin chào, {user.fullName}! 👋</p>
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
@@ -171,8 +187,8 @@ export function DashboardPage() {
           <StatCard
             title="Sân quản lý"
             icon={Building2}
-            value={user.assignedFields?.length || 0}
-            description="Sân được giao"
+            value={0}
+            description="Chưa gán sân"
             bgColor="bg-gradient-to-br from-purple-50/80 to-purple-100/50"
           />
         </div>
@@ -184,7 +200,7 @@ export function DashboardPage() {
           <CardContent>
             <div className="space-y-3">
               {staffBookings.filter(b => b.status === 'PENDING').map((booking) => {
-                const field = mockFields.find(f => f.id === booking.fieldId);
+                const field = fields.find(f => f.id === booking.fieldId);
                 return (
                   <div key={booking.id} className="flex items-center justify-between p-4 border border-amber-200/50 bg-amber-50/30 rounded-xl">
                     <div className="space-y-1 flex-1">
@@ -215,7 +231,7 @@ export function DashboardPage() {
   }
 
   // Customer Dashboard
-  const customerBookings = mockBookings.filter(b => b.customerId === user?.id);
+  const customerBookings = mockBookings.filter(b => b.customerId === user?.userId?.toString());
   const upcomingBookings = customerBookings.filter(b =>
     b.status === 'CONFIRMED' && new Date(b.date) >= new Date()
   );
@@ -227,7 +243,7 @@ export function DashboardPage() {
         <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-600 to-purple-600 bg-clip-text text-transparent">
           Dashboard
         </h1>
-        <p className="text-slate-600">Xin chào, {user?.name}! 👋</p>
+        <p className="text-slate-600">Xin chào, {user?.fullName}! 👋</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -261,7 +277,7 @@ export function DashboardPage() {
         <CardContent>
           <div className="space-y-3">
             {upcomingBookings.map((booking) => {
-              const field = mockFields.find(f => f.id === booking.fieldId);
+              const field = fields.find(f => f.id === booking.fieldId);
               return (
                 <div key={booking.id} className="flex items-center justify-between p-4 border border-emerald-200/50 bg-emerald-50/30 rounded-xl hover:shadow-md transition-shadow">
                   <div className="space-y-1 flex-1">

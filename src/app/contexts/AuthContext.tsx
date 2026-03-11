@@ -3,59 +3,65 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 export type UserRole = 'ADMIN' | 'STAFF' | 'CUSTOMER';
 
 export interface User {
-  id: string;
-  name: string;
+  userId: number;
+  fullName: string;
   email: string;
   role: UserRole;
-  assignedFields?: string[]; // For staff
+  phone?: string;
+  isActive: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users
-const mockUsers: User[] = [
-  {
-    id: '1',
-    name: 'Admin User',
-    email: 'admin@football.com',
-    role: 'ADMIN',
-  },
-  {
-    id: '2',
-    name: 'Nguyễn Văn A',
-    email: 'staff@football.com',
-    role: 'STAFF',
-    assignedFields: ['1', '2'],
-  },
-  {
-    id: '3',
-    name: 'Trần Văn B',
-    email: 'customer@football.com',
-    role: 'CUSTOMER',
-  },
-];
+import { authService } from '../api/auth.service';
+import { useEffect } from 'react';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    // Mock authentication - in real app, this would call an API
-    const foundUser = mockUsers.find((u) => u.email === email);
-    if (foundUser) {
-      setUser(foundUser);
-      return true;
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = authService.getToken();
+      if (token) {
+        try {
+          const profile = await authService.getProfile();
+          setUser(profile as unknown as User);
+        } catch (error) {
+          console.error('Failed to restore session:', error);
+          authService.logout();
+        }
+      }
+      setLoading(false);
+    };
+
+    initAuth();
+  }, []);
+
+  const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+      console.log('Attempting login for:', email);
+      const authResponse = await authService.login({ email, password });
+      console.log('Login success:', authResponse);
+      setUser(authResponse.user as unknown as User);
+      return { success: true };
+    } catch (error: any) {
+      console.error('Login error details:', error);
+      const errorMessage = error.message || (typeof error === 'string' ? error : 'Đăng nhập không thành công');
+      return { success: false, message: errorMessage };
     }
-    return false;
   };
 
   const logout = () => {
+    authService.logout();
     setUser(null);
   };
 
@@ -68,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
       }}
     >
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 }

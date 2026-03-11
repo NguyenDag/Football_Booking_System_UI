@@ -1,28 +1,74 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Label } from '../components/ui/label';
+import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Calendar } from '../components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { CalendarIcon, Clock, MapPin, DollarSign, Zap, Check } from 'lucide-react';
-import { mockFields, availableTimeSlots, getPriceForTimeSlot, mockBookings } from '../data/mockData';
+import { CalendarIcon, Clock, MapPin, DollarSign, Zap, Check, Loader2 } from 'lucide-react';
+import { mockBookings } from '../data/mockData';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, startOfDay } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useUnsplash } from '../hooks/useUnsplash';
+import { pitchService, Field as ApiField } from '../api/pitch.service';
+import { bookingService } from '../api/booking.service';
 
 export function BookFieldPage() {
+  const [fields, setFields] = useState<ApiField[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedField, setSelectedField] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [startTime, setStartTime] = useState<string>('');
   const [duration, setDuration] = useState<60 | 90 | 120>(90);
   const [note, setNote] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const activeFields = mockFields.filter(f => f.status === 'ACTIVE');
+  useEffect(() => {
+    fetchFields();
+  }, []);
+
+  const fetchFields = async () => {
+    try {
+      setLoading(true);
+      const data = await pitchService.getAllPitches();
+      setFields(data);
+    } catch (error: any) {
+      toast.error('Không thể tải danh sách sân');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const activeFields = fields.filter(f => f.status === 'ACTIVE');
+
+  // Generate 30-minute intervals from field's price slots
+  const getAvailableTimeSlots = (): string[] => {
+    const field = fields.find(f => f.id === selectedField);
+    if (!field || !field.priceSlots || field.priceSlots.length === 0) return [];
+
+    const slots = new Set<string>();
+    field.priceSlots.forEach(ps => {
+      let [h, m] = ps.startTime.split(':').map(Number);
+      let [endH, endM] = ps.endTime.split(':').map(Number);
+
+      let currentTotal = h * 60 + m;
+      const endTotal = endH * 60 + endM;
+
+      while (currentTotal < endTotal) {
+        const hh = Math.floor(currentTotal / 60).toString().padStart(2, '0');
+        const mm = (currentTotal % 60).toString().padStart(2, '0');
+        slots.add(`${hh}:${mm}`);
+        currentTotal += 30;
+      }
+    });
+
+    return Array.from(slots).sort();
+  };
 
   const calculateEndTime = (start: string, dur: number): string => {
     const [hours, minutes] = start.split(':').map(Number);
@@ -35,7 +81,18 @@ export function BookFieldPage() {
   const calculatePrice = (): number => {
     if (!selectedField || !startTime || !duration) return 0;
 
-    const pricePerHour = getPriceForTimeSlot(selectedField, startTime);
+    const field = fields.find(f => f.id === selectedField);
+    if (!field || !field.priceSlots) return 0;
+
+    // Find the matching price slot
+    const checkTime = parseInt(startTime.replace(':', ''));
+    const priceSlot = field.priceSlots.find(ps => {
+      const slotStart = parseInt(ps.startTime.replace(':', ''));
+      const slotEnd = parseInt(ps.endTime.replace(':', ''));
+      return checkTime >= slotStart && checkTime < slotEnd;
+    });
+
+    const pricePerHour = priceSlot?.price || 0;
     return Math.round((pricePerHour * duration) / 60);
   };
 
@@ -64,7 +121,7 @@ export function BookFieldPage() {
     return conflicts.length === 0;
   };
 
-  const handleBooking = () => {
+  const handleBooking = async () => {
     if (!selectedField || !selectedDate || !startTime) {
       toast.error('Vui lòng chọn đầy đủ thông tin');
       return;
@@ -75,19 +132,35 @@ export function BookFieldPage() {
       return;
     }
 
-    const totalPrice = calculatePrice();
-    const endTime = calculateEndTime(startTime, duration);
+    try {
+      setIsSubmitting(true);
+      const totalPrice = calculatePrice();
+      
+      const request = {
+        pitchId: parseInt(selectedField),
+        playDate: format(selectedDate, 'yyyy-MM-dd'),
+        startTime: `${startTime}:00`, // Format to hh:mm:ss for backend TimeSpan
+        durationMinutes: duration,
+        notes: note
+      };
 
-    toast.success(
-      `Đặt sân thành công!\nTổng tiền: ${totalPrice.toLocaleString('vi-VN')}đ`
-    );
+      await bookingService.createBooking(request);
 
-    // Reset form
-    setSelectedField('');
-    setSelectedDate(undefined);
-    setStartTime('');
-    setDuration(90);
-    setNote('');
+      toast.success(
+        `Đặt sân thành công!\nTổng tiền: ${totalPrice.toLocaleString('vi-VN')}đ`
+      );
+
+      // Reset form
+      setSelectedField('');
+      setSelectedDate(undefined);
+      setStartTime('');
+      setDuration(90);
+      setNote('');
+    } catch (error: any) {
+      toast.error(error.message || 'Đặt sân thất bại, vui lòng thử lại');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const selectedFieldData = activeFields.find(f => f.id === selectedField);
@@ -118,34 +191,45 @@ export function BookFieldPage() {
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2">
-                {activeFields.map((field) => (
-                  <div
-                    key={field.id}
-                    onClick={() => setSelectedField(field.id)}
-                    className={`relative overflow-hidden rounded-xl p-4 cursor-pointer transition-all transform hover:scale-105 ${selectedField === field.id
-                        ? 'border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 to-emerald-100/50 ring-2 ring-emerald-400 shadow-lg'
-                        : 'border-2 border-slate-200 hover:border-emerald-300 hover:shadow-md'
-                      }`}
-                  >
-                    {selectedField === field.id && (
-                      <div className="absolute top-2 right-2 bg-emerald-500 text-white p-1 rounded-full">
-                        <Check className="w-4 h-4" />
-                      </div>
-                    )}
-                    <div className="aspect-video bg-gradient-to-br from-slate-200 to-slate-300 rounded-lg overflow-hidden mb-3 shadow-md">
-                      <FieldImage query={field.image} />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="font-bold text-slate-900">{field.name}</h3>
-                        <Badge className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white">
-                          {field.type}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-slate-600 line-clamp-2">{field.description}</p>
-                    </div>
+                {loading ? (
+                  <div className="col-span-full flex flex-col items-center py-10 space-y-3">
+                    <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+                    <p className="text-sm text-slate-500">Đang tải danh sách sân...</p>
                   </div>
-                ))}
+                ) : activeFields.length === 0 ? (
+                  <div className="col-span-full text-center py-10 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                    <p className="text-slate-500">Không có sân nào sẵn sàng</p>
+                  </div>
+                ) : (
+                  activeFields.map((field) => (
+                    <div
+                      key={field.id}
+                      onClick={() => setSelectedField(field.id)}
+                      className={`relative overflow-hidden rounded-xl p-4 cursor-pointer transition-all transform hover:scale-105 ${selectedField === field.id
+                          ? 'border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 to-emerald-100/50 ring-2 ring-emerald-400 shadow-lg'
+                          : 'border-2 border-slate-200 hover:border-emerald-300 hover:shadow-md'
+                        }`}
+                    >
+                      {selectedField === field.id && (
+                        <div className="absolute top-2 right-2 bg-emerald-500 text-white p-1 rounded-full">
+                          <Check className="w-4 h-4" />
+                        </div>
+                      )}
+                      <div className="aspect-video bg-gradient-to-br from-slate-200 to-slate-300 rounded-lg overflow-hidden mb-3 shadow-md">
+                        <FieldImage query={field.image} />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="font-bold text-slate-900">{field.name}</h3>
+                          <Badge className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white">
+                            {field.type}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-slate-600 line-clamp-2">{field.description}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
@@ -162,30 +246,22 @@ export function BookFieldPage() {
               {/* Date Picker */}
               <div className="space-y-3">
                 <Label className="text-slate-700 font-semibold">📅 Ngày đá</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal h-12 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50"
-                    >
-                      <CalendarIcon className="mr-2 h-5 w-5 text-emerald-500" />
-                      {selectedDate ? (
-                        <span className="font-medium">{format(selectedDate, 'PPP', { locale: vi })}</span>
-                      ) : (
-                        <span className="text-slate-400">Chọn ngày đá</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 shadow-lg border-0">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      disabled={(date) => date < new Date()}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <div className="relative">
+                  <Input
+                    type="date"
+                    value={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      const val = e.target.value;
+                      setSelectedDate(val ? new Date(val) : undefined);
+                    }}
+                    min={format(new Date(), 'yyyy-MM-dd')}
+                    className="h-12 border-slate-200 hover:border-emerald-300 focus:border-emerald-400 pl-11 text-base font-medium transition-all"
+                  />
+                  <CalendarIcon className="absolute left-3.5 top-3.5 h-5 w-5 text-emerald-500 pointer-events-none" />
+                  <div className="absolute right-3.5 top-3.5 text-xs text-slate-400 pointer-events-none font-medium uppercase tracking-wider">
+                    {selectedDate ? format(selectedDate, 'dd/MM/yyyy') : 'Chọn ngày'}
+                  </div>
+                </div>
               </div>
 
               {/* Time Selection */}
@@ -197,7 +273,7 @@ export function BookFieldPage() {
                       <SelectValue placeholder="Chọn giờ" />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableTimeSlots.map((time) => {
+                      {getAvailableTimeSlots().map((time) => {
                         const available = isTimeSlotAvailable(time);
                         return (
                           <SelectItem
@@ -205,7 +281,10 @@ export function BookFieldPage() {
                             value={time}
                             disabled={!available}
                           >
-                            {time} {!available && '❌ (Đã đặt)'}
+                            <div className="flex items-center justify-between w-full">
+                              <span>{time}</span>
+                              {!available && <span className="ml-2 text-[10px] text-red-500 font-bold uppercase">Đã đặt</span>}
+                            </div>
                           </SelectItem>
                         );
                       })}
@@ -340,9 +419,16 @@ export function BookFieldPage() {
                 className="w-full h-12 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-bold shadow-lg hover:shadow-xl transition-all"
                 size="lg"
                 onClick={handleBooking}
-                disabled={!selectedField || !selectedDate || !startTime}
+                disabled={!selectedField || !selectedDate || !startTime || isSubmitting}
               >
-                🚀 Đặt sân ngay
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Đang xử lý...
+                  </>
+                ) : (
+                  <>🚀 Đặt sân ngay</>
+                )}
               </Button>
 
               <div className="space-y-2 text-xs text-slate-600 bg-slate-50/50 p-3 rounded-lg">

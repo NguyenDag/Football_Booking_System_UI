@@ -5,21 +5,69 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { Calendar, Clock, MapPin, XCircle } from 'lucide-react';
-import { mockBookings, mockFields, type Booking } from '../data/mockData';
+import { Calendar, Clock, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { pitchService, Field as ApiField } from '../api/pitch.service';
+import { bookingService, type BookingResponse, type BookingDetailResponse } from '../api/booking.service';
+
+interface FlatBooking extends BookingDetailResponse {
+  totalPrice: number;
+  userId: number;
+  createdAt: string;
+  note?: string;
+}
 
 export function MyBookingsPage() {
   const { user } = useAuth();
-  const [bookings, setBookings] = useState(mockBookings.filter(b => b.customerId === user?.id));
-  const [cancelDialog, setCancelDialog] = useState<Booking | null>(null);
+  const [fields, setFields] = useState<ApiField[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [bookings, setBookings] = useState<FlatBooking[]>([]);
+  const [cancelDialog, setCancelDialog] = useState<FlatBooking | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
-  const handleCancel = () => {
+  React.useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [fieldsData, bookingsData] = await Promise.all([
+        pitchService.getAllPitches(),
+        bookingService.getMyBookings()
+      ]);
+      
+      setFields(fieldsData);
+      
+      // Flatten bookings for the UI
+      const flat: FlatBooking[] = [];
+      bookingsData.forEach((b: BookingResponse) => {
+        b.details.forEach(detail => {
+          flat.push({
+            ...detail,
+            totalPrice: b.totalAmount,
+            userId: b.userId,
+            createdAt: b.createdAt,
+            note: b.notes
+          });
+        });
+      });
+      
+      setBookings(flat);
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+      toast.error('Không thể tải dữ liệu');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancel = async () => {
     if (!cancelDialog) return;
 
-    const bookingDate = new Date(cancelDialog.date + 'T' + cancelDialog.startTime);
+    const bookingDate = new Date(cancelDialog.playDate + 'T' + cancelDialog.startTime);
     const now = new Date();
     const hoursUntil = (bookingDate.getTime() - now.getTime()) / (1000 * 60 * 60);
 
@@ -29,13 +77,17 @@ export function MyBookingsPage() {
       return;
     }
 
-    setBookings(bookings.map(b =>
-      b.id === cancelDialog.id
-        ? { ...b, status: 'CANCELLED', cancelReason: 'Khách hàng hủy' }
-        : b
-    ));
-    toast.success('Đã hủy booking thành công');
-    setCancelDialog(null);
+    try {
+      setIsCancelling(true);
+      await bookingService.cancelBooking(cancelDialog.detailId, 'Khách hàng hủy');
+      toast.success('Đã hủy booking thành công');
+      setCancelDialog(null);
+      fetchData(); // Refresh list
+    } catch (error: any) {
+      toast.error(error.message || 'Hủy thất bại');
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -52,20 +104,20 @@ export function MyBookingsPage() {
 
   const upcomingBookings = bookings.filter(b =>
     (b.status === 'CONFIRMED' || b.status === 'PENDING') &&
-    new Date(b.date) >= new Date()
+    new Date(b.playDate) >= new Date()
   );
 
   const pastBookings = bookings.filter(b =>
-    b.status === 'COMPLETED' || new Date(b.date) < new Date()
+    b.status === 'COMPLETED' || new Date(b.playDate) < new Date()
   );
 
   const cancelledBookings = bookings.filter(b =>
     b.status === 'CANCELLED' || b.status === 'REJECTED'
   );
 
-  const BookingCard = ({ booking }: { booking: Booking }) => {
-    const field = mockFields.find(f => f.id === booking.fieldId);
-    const bookingDate = new Date(booking.date + 'T' + booking.startTime);
+  const BookingCard = ({ booking }: { booking: FlatBooking }) => {
+    const field = fields.find(f => f.id === booking.pitchId.toString());
+    const bookingDate = new Date(booking.playDate + 'T' + booking.startTime);
     const now = new Date();
     const canCancel = booking.status === 'PENDING' || booking.status === 'CONFIRMED';
     const hoursUntil = (bookingDate.getTime() - now.getTime()) / (1000 * 60 * 60);
@@ -77,13 +129,13 @@ export function MyBookingsPage() {
             <div className="flex items-start justify-between">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-medium">{field?.name}</h3>
+                  <h3 className="text-lg font-medium">{booking.pitchName}</h3>
                   {getStatusBadge(booking.status)}
                 </div>
-                <p className="text-sm text-gray-600">Sân {field?.type} người</p>
+                <p className="text-sm text-gray-600">Sân {field?.type || '...'} người</p>
               </div>
               <p className="text-xl font-bold text-green-600">
-                {booking.totalPrice.toLocaleString('vi-VN')}đ
+                {booking.priceAtBooking.toLocaleString('vi-VN')}đ
               </p>
             </div>
 
@@ -93,7 +145,7 @@ export function MyBookingsPage() {
                 <div>
                   <p className="text-sm text-gray-600">Ngày đá</p>
                   <p className="font-medium">
-                    {format(new Date(booking.date), 'PPP', { locale: vi })}
+                    {format(new Date(booking.playDate), 'PPP', { locale: vi })}
                   </p>
                 </div>
               </div>
@@ -103,7 +155,7 @@ export function MyBookingsPage() {
                 <div>
                   <p className="text-sm text-gray-600">Thời gian</p>
                   <p className="font-medium">
-                    {booking.startTime} - {booking.endTime}
+                    {booking.startTime.substring(0, 5)} - {booking.endTime.substring(0, 5)}
                   </p>
                 </div>
               </div>
@@ -113,13 +165,6 @@ export function MyBookingsPage() {
               <div className="text-sm p-3 bg-gray-50 rounded-lg">
                 <p className="text-gray-600">Ghi chú:</p>
                 <p className="text-gray-800">{booking.note}</p>
-              </div>
-            )}
-
-            {booking.cancelReason && (
-              <div className="text-sm p-3 bg-red-50 rounded-lg">
-                <p className="text-red-600 font-medium">Lý do hủy:</p>
-                <p className="text-red-800">{booking.cancelReason}</p>
               </div>
             )}
 
@@ -171,7 +216,7 @@ export function MyBookingsPage() {
 
         <TabsContent value="upcoming" className="space-y-4 mt-6">
           {upcomingBookings.map(booking => (
-            <BookingCard key={booking.id} booking={booking} />
+            <BookingCard key={booking.detailId} booking={booking} />
           ))}
           {upcomingBookings.length === 0 && (
             <Card>
@@ -190,7 +235,7 @@ export function MyBookingsPage() {
 
         <TabsContent value="past" className="space-y-4 mt-6">
           {pastBookings.map(booking => (
-            <BookingCard key={booking.id} booking={booking} />
+            <BookingCard key={booking.detailId} booking={booking} />
           ))}
           {pastBookings.length === 0 && (
             <Card>
@@ -206,7 +251,7 @@ export function MyBookingsPage() {
 
         <TabsContent value="cancelled" className="space-y-4 mt-6">
           {cancelledBookings.map(booking => (
-            <BookingCard key={booking.id} booking={booking} />
+            <BookingCard key={booking.detailId} booking={booking} />
           ))}
           {cancelledBookings.length === 0 && (
             <Card>
@@ -233,16 +278,16 @@ export function MyBookingsPage() {
           <div className="space-y-4">
             {cancelDialog && (
               <div className="p-4 bg-gray-50 rounded-lg space-y-2 text-sm">
-                <p><span className="font-medium">Sân:</span> {mockFields.find(f => f.id === cancelDialog.fieldId)?.name}</p>
-                <p><span className="font-medium">Ngày:</span> {cancelDialog.date}</p>
-                <p><span className="font-medium">Giờ:</span> {cancelDialog.startTime} - {cancelDialog.endTime}</p>
-                <p><span className="font-medium">Tiền:</span> {cancelDialog.totalPrice.toLocaleString('vi-VN')}đ</p>
+                <p><span className="font-medium">Sân:</span> {cancelDialog.pitchName}</p>
+                <p><span className="font-medium">Ngày:</span> {cancelDialog.playDate}</p>
+                <p><span className="font-medium">Giờ:</span> {cancelDialog.startTime.substring(0, 5)} - {cancelDialog.endTime.substring(0, 5)}</p>
+                <p><span className="font-medium">Tiền:</span> {cancelDialog.priceAtBooking.toLocaleString('vi-VN')}đ</p>
               </div>
             )}
-            <Button variant="destructive" className="w-full" onClick={handleCancel}>
-              Xác nhận hủy
+            <Button variant="destructive" className="w-full" onClick={handleCancel} disabled={isCancelling}>
+              {isCancelling ? 'Đang xử lý...' : 'Xác nhận hủy'}
             </Button>
-            <Button variant="outline" className="w-full" onClick={() => setCancelDialog(null)}>
+            <Button variant="outline" className="w-full" onClick={() => setCancelDialog(null)} disabled={isCancelling}>
               Giữ lại booking
             </Button>
           </div>
