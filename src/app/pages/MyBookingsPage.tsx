@@ -17,6 +17,7 @@ interface FlatBooking extends BookingDetailResponse {
   userId: number;
   createdAt: string;
   note?: string;
+  cancellationReason?: string;
 }
 
 export function MyBookingsPage() {
@@ -25,6 +26,7 @@ export function MyBookingsPage() {
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<FlatBooking[]>([]);
   const [cancelDialog, setCancelDialog] = useState<FlatBooking | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
 
   React.useEffect(() => {
@@ -50,7 +52,8 @@ export function MyBookingsPage() {
             totalPrice: b.totalAmount,
             userId: b.userId,
             createdAt: b.createdAt,
-            note: b.notes
+            note: b.notes,
+            cancellationReason: detail.cancellationReason
           });
         });
       });
@@ -79,9 +82,10 @@ export function MyBookingsPage() {
 
     try {
       setIsCancelling(true);
-      await bookingService.cancelBooking(cancelDialog.detailId, 'Khách hàng hủy');
+      await bookingService.cancelBooking(cancelDialog.detailId, cancelReason || 'Khách hàng hủy');
       toast.success('Đã hủy booking thành công');
       setCancelDialog(null);
+      setCancelReason('');
       fetchData(); // Refresh list
     } catch (error: any) {
       toast.error(error.message || 'Hủy thất bại');
@@ -102,17 +106,19 @@ export function MyBookingsPage() {
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  const upcomingBookings = bookings.filter(b =>
-    (b.status === 'CONFIRMED' || b.status === 'PENDING') &&
-    new Date(b.playDate) >= new Date()
-  );
+  const now = new Date();
 
-  const pastBookings = bookings.filter(b =>
-    b.status === 'COMPLETED' || new Date(b.playDate) < new Date()
+  const upcomingBookings = bookings.filter(b => {
+    const bookingDate = new Date(b.playDate + 'T' + b.startTime);
+    return b.status.toUpperCase() === 'CONFIRMED' && bookingDate >= now;
+  });
+
+  const pastBookings = bookings.filter(b => 
+    b.status.toUpperCase() === 'COMPLETED'
   );
 
   const cancelledBookings = bookings.filter(b =>
-    b.status === 'CANCELLED' || b.status === 'REJECTED'
+    b.status.toUpperCase() === 'CANCELLED' || b.status.toUpperCase() === 'REJECTED'
   );
 
   const BookingCard = ({ booking }: { booking: FlatBooking }) => {
@@ -163,8 +169,15 @@ export function MyBookingsPage() {
 
             {booking.note && (
               <div className="text-sm p-3 bg-gray-50 rounded-lg">
-                <p className="text-gray-600">Ghi chú:</p>
+                <p className="text-gray-600 font-medium">Ghi chú từ khách hàng:</p>
                 <p className="text-gray-800">{booking.note}</p>
+              </div>
+            )}
+
+            {booking.cancellationReason && (
+              <div className="text-sm p-3 bg-red-50 rounded-lg border border-red-100">
+                <p className="text-red-600 font-medium">Lý do hủy/từ chối:</p>
+                <p className="text-red-800 italic">{booking.cancellationReason}</p>
               </div>
             )}
 
@@ -284,7 +297,23 @@ export function MyBookingsPage() {
                 <p><span className="font-medium">Tiền:</span> {cancelDialog.priceAtBooking.toLocaleString('vi-VN')}đ</p>
               </div>
             )}
-            <Button variant="destructive" className="w-full" onClick={handleCancel} disabled={isCancelling}>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Lý do hủy (bắt buộc):</label>
+              <textarea
+                className="w-full min-h-[80px] p-2 border rounded-md text-sm focus:ring-2 focus:ring-red-500 outline-none"
+                placeholder="Vui lòng nhập lý do bạn muốn hủy lịch..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+            </div>
+
+            <Button 
+              variant="destructive" 
+              className="w-full" 
+              onClick={handleCancel} 
+              disabled={isCancelling || !cancelReason.trim()}
+            >
               {isCancelling ? 'Đang xử lý...' : 'Xác nhận hủy'}
             </Button>
             <Button variant="outline" className="w-full" onClick={() => setCancelDialog(null)} disabled={isCancelling}>

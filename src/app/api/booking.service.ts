@@ -29,6 +29,7 @@ export interface BookingDetailResponse {
   durationMinutes: number;
   priceAtBooking: number;
   status: string;
+  cancellationReason?: string;
 }
 
 export const bookingService = {
