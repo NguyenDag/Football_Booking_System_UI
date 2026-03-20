@@ -9,11 +9,17 @@ export interface User {
   role: UserRole;
   phone?: string;
   isActive: boolean;
+  createdAt?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  register: (data: any) => Promise<{ success: boolean; message?: string }>;
+  forgotPassword: (email: string) => Promise<{ success: boolean; message?: string }>;
+  resetPassword: (data: any) => Promise<{ success: boolean; message?: string }>;
+  updateProfile: (data: any) => Promise<{ success: boolean; message?: string }>;
+  changePassword: (data: any) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -60,6 +66,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const register = async (data: any): Promise<{ success: boolean; message?: string }> => {
+    try {
+      await authService.register(data);
+      return { success: true };
+    } catch (error: any) {
+      console.error('Register error:', error);
+      const errorMessage = error.message || 'Đăng ký không thành công';
+      return { success: false, message: errorMessage };
+    }
+  };
+
+  const forgotPassword = async (email: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+      await authService.forgotPassword(email);
+      return { success: true };
+    } catch (error: any) {
+      console.error('Forgot password error:', error);
+      const errorMessage = error.message || 'Yêu cầu không thành công';
+      return { success: false, message: errorMessage };
+    }
+  };
+
+  const resetPassword = async (data: any): Promise<{ success: boolean; message?: string }> => {
+    try {
+      await authService.resetPassword(data);
+      return { success: true };
+    } catch (error: any) {
+      console.error('Reset password error:', error);
+      const errorMessage = error.message || 'Đặt lại mật khẩu không thành công';
+      return { success: false, message: errorMessage };
+    }
+  };
+
+  const updateProfile = async (data: any): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const updatedUser = await authService.updateProfile(data);
+      setUser(updatedUser as unknown as User);
+      return { success: true };
+    } catch (error: any) {
+      console.error('Update profile error:', error);
+      const errorMessage = error.message || 'Cập nhật thông tin không thành công';
+      return { success: false, message: errorMessage };
+    }
+  };
+
+  const changePassword = async (data: any): Promise<{ success: boolean; message?: string }> => {
+    try {
+      await authService.changePassword(data);
+      return { success: true };
+    } catch (error: any) {
+      console.error('Change password error:', error);
+      const errorMessage = error.message || 'Đổi mật khẩu không thành công';
+      return { success: false, message: errorMessage };
+    }
+  };
+
   const logout = () => {
     authService.logout();
     setUser(null);
@@ -70,6 +132,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         login,
+        register,
+        forgotPassword,
+        resetPassword,
+        updateProfile,
+        changePassword,
         logout,
         isAuthenticated: !!user,
       }}

@@ -92,8 +92,8 @@ export function Layout({ children }: LayoutProps) {
                     <Button
                       variant={isActive ? 'default' : 'ghost'}
                       className={`gap-2 transition-all ${isActive
-                          ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-md'
-                          : 'hover:bg-slate-100 text-slate-700'
+                        ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-md'
+                        : 'hover:bg-slate-100 text-slate-700'
                         }`}
                     >
                       <Icon className="w-4 h-4" />
@@ -107,8 +107,12 @@ export function Layout({ children }: LayoutProps) {
             {/* User Menu */}
             <div className="flex items-center gap-4">
               {/* User Info */}
-              <div className="hidden sm:block text-right">
-                <div className="text-sm font-semibold text-slate-900">{user?.name}</div>
+              {/* User Info & Profile Link */}
+              <div 
+                className="hidden sm:flex flex-col text-right cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => navigate('/profile')}
+              >
+                <div className="text-sm font-semibold text-slate-900">{user?.fullName}</div>
                 <div className="text-xs text-slate-500 font-medium">{user?.role}</div>
               </div>
 
@@ -154,8 +158,8 @@ export function Layout({ children }: LayoutProps) {
                     <Button
                       variant={isActive ? 'default' : 'ghost'}
                       className={`w-full justify-start gap-2 transition-all ${isActive
-                          ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-md'
-                          : 'hover:bg-slate-100 text-slate-700'
+                        ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-md'
+                        : 'hover:bg-slate-100 text-slate-700'
                         }`}
                     >
                       <Icon className="w-4 h-4" />

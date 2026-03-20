@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Building2, AlertCircle, Zap } from 'lucide-react';
+import { Building2, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '../components/ui/alert';
 
 export function LoginPage() {
@@ -21,21 +21,17 @@ export function LoginPage() {
     setError('');
     setLoading(true);
 
-    const success = await login(email, password);
+    const result = await login(email, password);
 
-    if (success) {
+    if (result.success) {
       navigate('/');
     } else {
-      setError('Email hoặc mật khẩu không đúng');
+      setError(result.message || 'Email hoặc mật khẩu không đúng');
     }
 
     setLoading(false);
   };
 
-  const quickLogin = (userEmail: string) => {
-    setEmail(userEmail);
-    setPassword('password');
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -115,6 +111,16 @@ export function LoginPage() {
                   </Alert>
                 )}
 
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/forgot-password')}
+                    className="text-sm text-emerald-600 hover:text-emerald-700 font-medium hover:underline transition-colors"
+                  >
+                    Quên mật khẩu?
+                  </button>
+                </div>
+
                 {/* Login Button */}
                 <Button
                   type="submit"
@@ -124,63 +130,24 @@ export function LoginPage() {
                   {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
                 </Button>
               </form>
-
-              {/* Divider */}
-              <div className="relative py-4">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-200"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-slate-500 font-medium">Demo</span>
-                </div>
-              </div>
-
-              {/* Quick Login Demo */}
-              <div className="space-y-2">
-                <p className="text-sm text-slate-600 text-center font-medium">
-                  <Zap className="w-4 h-4 inline mr-1 text-amber-500" />
-                  Đăng nhập nhanh:
-                </p>
-                <div className="grid gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => quickLogin('admin@football.com')}
-                    className="w-full justify-between hover:bg-gradient-to-r hover:from-emerald-50 hover:to-purple-50 border-slate-200 hover:border-emerald-300 transition-all"
-                  >
-                    <span className="font-semibold text-slate-700">Admin</span>
-                    <span className="text-xs text-slate-500">admin@football.com</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => quickLogin('staff@football.com')}
-                    className="w-full justify-between hover:bg-gradient-to-r hover:from-emerald-50 hover:to-purple-50 border-slate-200 hover:border-emerald-300 transition-all"
-                  >
-                    <span className="font-semibold text-slate-700">Staff</span>
-                    <span className="text-xs text-slate-500">staff@football.com</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => quickLogin('customer@football.com')}
-                    className="w-full justify-between hover:bg-gradient-to-r hover:from-emerald-50 hover:to-purple-50 border-slate-200 hover:border-emerald-300 transition-all"
-                  >
-                    <span className="font-semibold text-slate-700">Customer</span>
-                    <span className="text-xs text-slate-500">customer@football.com</span>
-                  </Button>
-                </div>
-              </div>
             </CardContent>
           </Card>
 
-          {/* Footer */}
-          <p className="text-center text-white/60 text-sm">
-            Nền tảng quản lý sân bóng hiện đại
-          </p>
+          {/* Footer UI links */}
+          <div className="text-center space-y-2">
+            <p className="text-white/80 text-sm">
+              Chưa có tài khoản?{' '}
+              <button
+                onClick={() => navigate('/register')}
+                className="text-emerald-400 font-bold hover:underline"
+              >
+                Đăng ký ngay
+              </button>
+            </p>
+            <p className="text-white/60 text-xs">
+              Nền tảng quản lý sân bóng hiện đại
+            </p>
+          </div>
         </div>
       </div>
     </div>
