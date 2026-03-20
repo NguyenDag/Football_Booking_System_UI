@@ -7,6 +7,8 @@ import { RegisterPage } from './pages/RegisterPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { StaffManagementPage } from './pages/StaffManagementPage';
+import { StaffDetailPage } from './pages/StaffDetailPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { FieldsPage } from './pages/FieldsPage';
 import { BookingsPage } from './pages/BookingsPage';
@@ -84,7 +86,17 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
             <Layout>
-              <StaffPage />
+              <StaffManagementPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/staff/:id"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <Layout>
+              <StaffDetailPage />
             </Layout>
           </ProtectedRoute>
         }
