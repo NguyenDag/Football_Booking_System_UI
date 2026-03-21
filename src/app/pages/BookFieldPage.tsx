@@ -16,7 +16,7 @@ import { vi } from 'date-fns/locale';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useUnsplash } from '../hooks/useUnsplash';
 import { pitchService, Field as ApiField } from '../api/pitch.service';
-import { bookingService } from '../api/booking.service';
+import { bookingService, AvailabilitySlot } from '../api/booking.service';
 
 export function BookFieldPage() {
   const [fields, setFields] = useState<ApiField[]>([]);
@@ -27,10 +27,36 @@ export function BookFieldPage() {
   const [duration, setDuration] = useState<60 | 90 | 120>(90);
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [availableSlots, setAvailableSlots] = useState<AvailabilitySlot[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   useEffect(() => {
     fetchFields();
   }, []);
+
+  useEffect(() => {
+    if (selectedField && selectedDate) {
+      fetchAvailability();
+    } else {
+      setAvailableSlots([]);
+    }
+    // Reset start time when field or date changes
+    setStartTime('');
+  }, [selectedField, selectedDate]);
+
+  const fetchAvailability = async () => {
+    try {
+      setLoadingSlots(true);
+      const dateStr = format(selectedDate!, 'yyyy-MM-dd');
+      const slots = await bookingService.getAvailability(parseInt(selectedField), dateStr);
+      setAvailableSlots(slots);
+    } catch (error: any) {
+      console.error('Failed to fetch availability:', error);
+      toast.error('Không thể tải lịch trống cho ngày này');
+    } finally {
+      setLoadingSlots(false);
+    }
+  };
 
   const fetchFields = async () => {
     try {
@@ -46,28 +72,9 @@ export function BookFieldPage() {
 
   const activeFields = fields.filter(f => f.status === 'ACTIVE');
 
-  // Generate 30-minute intervals from field's price slots
+  // Use available slots from backend
   const getAvailableTimeSlots = (): string[] => {
-    const field = fields.find(f => f.id === selectedField);
-    if (!field || !field.priceSlots || field.priceSlots.length === 0) return [];
-
-    const slots = new Set<string>();
-    field.priceSlots.forEach(ps => {
-      let [h, m] = ps.startTime.split(':').map(Number);
-      let [endH, endM] = ps.endTime.split(':').map(Number);
-
-      let currentTotal = h * 60 + m;
-      const endTotal = endH * 60 + endM;
-
-      while (currentTotal < endTotal) {
-        const hh = Math.floor(currentTotal / 60).toString().padStart(2, '0');
-        const mm = (currentTotal % 60).toString().padStart(2, '0');
-        slots.add(`${hh}:${mm}`);
-        currentTotal += 30;
-      }
-    });
-
-    return Array.from(slots).sort();
+    return availableSlots.map(s => s.startTime.substring(0, 5));
   };
 
   const calculateEndTime = (start: string, dur: number): string => {
@@ -79,46 +86,39 @@ export function BookFieldPage() {
   };
 
   const calculatePrice = (): number => {
-    if (!selectedField || !startTime || !duration) return 0;
+    if (!selectedField || !startTime || !duration || availableSlots.length === 0) return 0;
 
-    const field = fields.find(f => f.id === selectedField);
-    if (!field || !field.priceSlots) return 0;
+    // We need to calculate price based on all 30-min blocks covered by the duration
+    const startIdx = availableSlots.findIndex(s => s.startTime.startsWith(startTime));
+    if (startIdx === -1) return 0;
 
-    // Find the matching price slot
-    const checkTime = parseInt(startTime.replace(':', ''));
-    const priceSlot = field.priceSlots.find(ps => {
-      const slotStart = parseInt(ps.startTime.replace(':', ''));
-      const slotEnd = parseInt(ps.endTime.replace(':', ''));
-      return checkTime >= slotStart && checkTime < slotEnd;
-    });
+    const blocksNeeded = duration / 30;
+    let totalPrice = 0;
 
-    const pricePerHour = priceSlot?.price || 0;
-    return Math.round((pricePerHour * duration) / 60);
+    for (let i = 0; i < blocksNeeded; i++) {
+      const slot = availableSlots[startIdx + i];
+      if (!slot) return 0; // Duration extends beyond available slots
+      totalPrice += slot.price;
+    }
+
+    return totalPrice;
   };
 
   const isTimeSlotAvailable = (time: string): boolean => {
-    if (!selectedField || !selectedDate) return true;
+    if (!selectedField || !selectedDate || availableSlots.length === 0) return true;
 
-    const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    const endTime = calculateEndTime(time, duration);
+    const startIdx = availableSlots.findIndex(s => s.startTime.startsWith(time));
+    if (startIdx === -1) return false;
 
-    // Check if any booking conflicts with this time slot
-    const conflicts = mockBookings.filter(b => {
-      if (b.fieldId !== selectedField || b.date !== dateStr) return false;
-      if (b.status === 'CANCELLED' || b.status === 'REJECTED') return false;
+    const blocksNeeded = duration / 30;
+    
+    // Check if ALL blocks needed for the duration are available
+    for (let i = 0; i < blocksNeeded; i++) {
+        const slot = availableSlots[startIdx + i];
+        if (!slot || !slot.isAvailable) return false;
+    }
 
-      // Check time overlap
-      const bookingStart = b.startTime;
-      const bookingEnd = b.endTime;
-
-      return (
-        (time >= bookingStart && time < bookingEnd) ||
-        (endTime > bookingStart && endTime <= bookingEnd) ||
-        (time <= bookingStart && endTime >= bookingEnd)
-      );
-    });
-
-    return conflicts.length === 0;
+    return true;
   };
 
   const handleBooking = async () => {
@@ -268,9 +268,9 @@ export function BookFieldPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-3">
                   <Label className="text-slate-700 font-semibold">⏰ Giờ bắt đầu</Label>
-                  <Select value={startTime} onValueChange={setStartTime}>
+                  <Select value={startTime} onValueChange={setStartTime} disabled={loadingSlots || !selectedDate}>
                     <SelectTrigger className="h-12 border-slate-200 hover:border-emerald-300">
-                      <SelectValue placeholder="Chọn giờ" />
+                      <SelectValue placeholder={loadingSlots ? "Đang tải lịch..." : "Chọn giờ"} />
                     </SelectTrigger>
                     <SelectContent>
                       {getAvailableTimeSlots().map((time) => {
@@ -283,7 +283,7 @@ export function BookFieldPage() {
                           >
                             <div className="flex items-center justify-between w-full">
                               <span>{time}</span>
-                              {!available && <span className="ml-2 text-[10px] text-red-500 font-bold uppercase">Đã đặt</span>}
+                              {!available && <span className="ml-2 text-[10px] text-red-500 font-bold uppercase">Hết chỗ</span>}
                             </div>
                           </SelectItem>
                         );

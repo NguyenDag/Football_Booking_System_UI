@@ -32,6 +32,13 @@ export interface BookingDetailResponse {
   cancellationReason?: string;
 }
 
+export interface AvailabilitySlot {
+  startTime: string; // HH:mm:ss
+  endTime: string; // HH:mm:ss
+  isAvailable: boolean;
+  price: number;
+}
+
 export const bookingService = {
   async createBooking(request: BookingCreateRequest): Promise<BookingResponse> {
     const response = await apiClient('/bookings', {
@@ -61,5 +68,13 @@ export const bookingService = {
       return response.data;
     }
     throw new Error(response.message || 'Hủy đặt sân thất bại');
+  },
+
+  async getAvailability(pitchId: number, playDate: string): Promise<AvailabilitySlot[]> {
+    const response = await apiClient(`/bookings/availability?pitchId=${pitchId}&playDate=${playDate}`);
+    if (response.success) {
+      return response.data;
+    }
+    throw new Error(response.message || 'Không thể tải lịch trống');
   }
 };
