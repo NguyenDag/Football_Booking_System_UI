@@ -11,11 +11,12 @@ import { StaffManagementPage } from './pages/StaffManagementPage';
 import { StaffDetailPage } from './pages/StaffDetailPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { FieldsPage } from './pages/FieldsPage';
+import { StaffPage } from './pages/StaffPage';
 import { BookingsPage } from './pages/BookingsPage';
 import { BookFieldPage } from './pages/BookFieldPage';
 import { MyBookingsPage } from './pages/MyBookingsPage';
 import { StatisticsPage } from './pages/StatisticsPage';
-import { StaffPage } from './pages/StaffPage';
+import { LandingPage } from './pages/LandingPage';
 import { Toaster } from './components/ui/sonner';
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode; allowedRoles?: string[] }) {
@@ -33,7 +34,7 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
 }
 
 function AppRoutes() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   return (
     <Routes>
@@ -62,13 +63,25 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/"
+        path="/dashboard"
         element={
           <ProtectedRoute>
             <Layout>
               <DashboardPage />
             </Layout>
           </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/"
+        element={
+          (user?.role === 'ADMIN' || user?.role === 'STAFF') ? (
+            <Navigate to="/dashboard" replace />
+          ) : (
+            <Layout>
+              <LandingPage />
+            </Layout>
+          )
         }
       />
       <Route

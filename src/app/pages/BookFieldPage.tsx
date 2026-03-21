@@ -130,36 +130,61 @@ export function BookFieldPage() {
     return totalPrice;
   };
 
-  const isTimeSlotAvailable = (time: string): boolean => {
-    if (!selectedField || !selectedDate || availableSlots.length === 0) return true;
-    if (!selectedField || !selectedDate || isCheckingAvailability) return true;
+  type AvailabilityStatus = 'AVAILABLE' | 'OCCUPIED' | 'CLOSED' | 'PAST';
+
+  const getTimeSlotStatus = (time: string): AvailabilityStatus => {
+    if (!selectedField || !selectedDate || availableSlots.length === 0) return 'AVAILABLE';
+    if (!selectedField || !selectedDate || isCheckingAvailability) return 'AVAILABLE';
 
     const startIdx = availableSlots.findIndex(s => s.startTime.startsWith(time));
-    if (startIdx === -1) return false;
+    if (startIdx === -1) return 'CLOSED';
 
     const blocksNeeded = duration / 30;
 
-    // Check if ALL blocks needed for the duration are available
+    // 1. Check if duration fits within operating hours
     for (let i = 0; i < blocksNeeded; i++) {
       const slot = availableSlots[startIdx + i];
-      if (!slot || !slot.isAvailable) return false;
+      if (!slot) return 'CLOSED';
     }
-    const endTime = calculateEndTime(time, duration);
 
-    // Check if any booking conflicts with this time slot
-    const conflicts = existingBookings.filter(b => {
-      // Check time overlap
+    // 2. Check if any slot is in the past or occupied
+    for (let i = 0; i < blocksNeeded; i++) {
+      const slot = availableSlots[startIdx + i];
+      if (!slot.isAvailable) {
+        // Check if it's in the past
+        const [hours, minutes] = slot.startTime.split(':').map(Number);
+        const slotDate = new Date(selectedDate);
+        slotDate.setHours(hours, minutes, 0, 0);
+
+        if (slotDate < new Date()) return 'PAST';
+        return 'OCCUPIED';
+      }
+    }
+
+    // 3. Check for conflicts with existing bookings (double safety check)
+    const endTimeStr = calculateEndTime(time, duration);
+    const hasConflict = existingBookings.some(b => {
       const bookingStart = b.startTime.substring(0, 5);
       const bookingEnd = b.endTime.substring(0, 5);
-
       return (
         (time >= bookingStart && time < bookingEnd) ||
-        (endTime > bookingStart && endTime <= bookingEnd) ||
-        (time <= bookingStart && endTime >= bookingEnd)
+        (endTimeStr > bookingStart && endTimeStr <= bookingEnd) ||
+        (time <= bookingStart && endTimeStr >= bookingEnd)
       );
     });
 
-    return conflicts.length === 0;
+    if (hasConflict) return 'OCCUPIED';
+
+    return 'AVAILABLE';
+  };
+
+  const getStatusLabel = (status: AvailabilityStatus) => {
+    switch (status) {
+      case 'OCCUPIED': return { label: 'Hết chỗ', color: 'text-red-500' };
+      case 'CLOSED': return { label: 'Hết giờ', color: 'text-orange-500' };
+      case 'PAST': return { label: 'Đã qua', color: 'text-gray-400' };
+      default: return null;
+    }
   };
 
   const handleBooking = async () => {
@@ -168,8 +193,10 @@ export function BookFieldPage() {
       return;
     }
 
-    if (!isTimeSlotAvailable(startTime)) {
-      toast.error('Khung giờ này đã được đặt');
+    const status = getTimeSlotStatus(startTime);
+    if (status !== 'AVAILABLE') {
+      const msg = getStatusLabel(status)?.label || 'Không khả dụng';
+      toast.error(`Khung giờ này ${msg.toLowerCase()}`);
       return;
     }
 
@@ -315,16 +342,23 @@ export function BookFieldPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {getAvailableTimeSlots().map((time) => {
-                        const available = isTimeSlotAvailable(time);
+                        const status = getTimeSlotStatus(time);
+                        const isAvailable = status === 'AVAILABLE';
+                        const statusInfo = getStatusLabel(status);
+
                         return (
                           <SelectItem
                             key={time}
                             value={time}
-                            disabled={!available}
+                            disabled={!isAvailable}
                           >
                             <div className="flex items-center justify-between w-full">
                               <span>{time}</span>
-                              {!available && <span className="ml-2 text-[10px] text-red-500 font-bold uppercase">Hết chỗ</span>}
+                              {statusInfo && (
+                                <span className={`ml-2 text-[10px] font-bold uppercase ${statusInfo.color}`}>
+                                  {statusInfo.label}
+                                </span>
+                              )}
                             </div>
                           </SelectItem>
                         );

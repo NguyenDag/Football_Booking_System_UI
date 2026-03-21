@@ -6,6 +6,7 @@ export interface PriceSlot {
   startTime: string; // HH:mm
   endTime: string;   // HH:mm
   price: number;
+  applyOn: 'WEEKDAY' | 'WEEKEND' | 'ALL';
   type: 'PEAK' | 'OFF_PEAK' | 'WEEKEND';
 }
 
@@ -63,6 +64,7 @@ export const pitchService = {
           startTime: formatTimeSpan(ps.startTime),
           endTime: formatTimeSpan(ps.endTime),
           price: ps.pricePerHour,
+          applyOn: ps.applyOn as 'WEEKDAY' | 'WEEKEND' | 'ALL',
           type: ps.isPeakHour ? 'PEAK' : 'OFF_PEAK'
         }))
       }));
@@ -87,6 +89,7 @@ export const pitchService = {
           startTime: formatTimeSpan(ps.startTime),
           endTime: formatTimeSpan(ps.endTime),
           price: ps.pricePerHour,
+          applyOn: ps.applyOn as 'WEEKDAY' | 'WEEKEND' | 'ALL',
           type: ps.isPeakHour ? 'PEAK' : 'OFF_PEAK'
         }))
       };

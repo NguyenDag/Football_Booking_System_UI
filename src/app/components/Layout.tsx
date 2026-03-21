@@ -32,13 +32,17 @@ export function Layout({ children }: LayoutProps) {
   };
 
   const getNavItems = () => {
-    const baseItems = [
-      { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    if (!user) {
+      return [{ path: '/', label: 'Trang chủ', icon: LayoutDashboard }];
+    }
+
+    const authenticatedItems = [
+      { path: '/dashboard', label: 'Bảng điều khiển', icon: LayoutDashboard },
     ];
 
-    if (user?.role === 'ADMIN') {
+    if (user.role === 'ADMIN') {
       return [
-        ...baseItems,
+        ...authenticatedItems,
         { path: '/fields', label: 'Quản lý sân', icon: Building2 },
         { path: '/staff', label: 'Nhân viên', icon: Users },
         { path: '/bookings', label: 'Đặt lịch', icon: Calendar },
@@ -46,22 +50,23 @@ export function Layout({ children }: LayoutProps) {
       ];
     }
 
-    if (user?.role === 'STAFF') {
+    if (user.role === 'STAFF') {
       return [
-        ...baseItems,
+        ...authenticatedItems,
         { path: '/bookings', label: 'Quản lý lịch', icon: Calendar },
       ];
     }
 
-    if (user?.role === 'CUSTOMER') {
+    if (user.role === 'CUSTOMER') {
       return [
-        ...baseItems,
+        { path: '/', label: 'Trang chủ', icon: LayoutDashboard },
+        ...authenticatedItems,
         { path: '/book-field', label: 'Đặt sân', icon: Calendar },
         { path: '/my-bookings', label: 'Lịch của tôi', icon: Calendar },
       ];
     }
 
-    return baseItems;
+    return authenticatedItems;
   };
 
   const navItems = getNavItems();
@@ -73,7 +78,7 @@ export function Layout({ children }: LayoutProps) {
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-2 group">
+            <Link to={(user?.role === 'ADMIN' || user?.role === 'STAFF') ? "/dashboard" : "/"} className="flex items-center gap-2 group">
               <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
                 <Building2 className="w-6 h-6 text-white" />
               </div>
@@ -104,28 +109,40 @@ export function Layout({ children }: LayoutProps) {
               })}
             </nav>
 
-            {/* User Menu */}
+            {/* User Menu / Auth Buttons */}
             <div className="flex items-center gap-4">
-              {/* User Info */}
-              {/* User Info & Profile Link */}
-              <div 
-                className="hidden sm:flex flex-col text-right cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => navigate('/profile')}
-              >
-                <div className="text-sm font-semibold text-slate-900">{user?.fullName}</div>
-                <div className="text-xs text-slate-500 font-medium">{user?.role}</div>
-              </div>
+              {user ? (
+                <>
+                  {/* User Info & Profile Link */}
+                  <div 
+                    className="hidden sm:flex flex-col text-right cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => navigate('/profile')}
+                  >
+                    <div className="text-sm font-semibold text-slate-900">{user.fullName}</div>
+                    <div className="text-xs text-slate-500 font-medium">{user.role}</div>
+                  </div>
 
-              {/* Desktop Logout */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLogout}
-                className="gap-2 hidden md:flex text-slate-700 hover:bg-red-50 hover:text-red-600 transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                Đăng xuất
-              </Button>
+                  {/* Desktop Logout */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleLogout}
+                    className="gap-2 hidden md:flex text-slate-700 hover:bg-red-50 hover:text-red-600 transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Đăng xuất
+                  </Button>
+                </>
+              ) : (
+                <div className="hidden md:flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/login')}>
+                    Đăng nhập
+                  </Button>
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => navigate('/register')}>
+                    Đăng ký
+                  </Button>
+                </div>
+              )}
 
               {/* Mobile menu button */}
               <Button
@@ -168,14 +185,25 @@ export function Layout({ children }: LayoutProps) {
                   </Link>
                 );
               })}
-              <Button
-                variant="ghost"
-                className="w-full justify-start gap-2 text-slate-700 hover:bg-red-50 hover:text-red-600"
-                onClick={handleLogout}
-              >
-                <LogOut className="w-4 h-4" />
-                Đăng xuất
-              </Button>
+              {user ? (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-2 text-slate-700 hover:bg-red-50 hover:text-red-600"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="w-4 h-4" />
+                  Đăng xuất
+                </Button>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 p-2">
+                  <Button variant="outline" size="sm" onClick={() => navigate('/login')}>
+                    Đăng nhập
+                  </Button>
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => navigate('/register')}>
+                    Đăng ký
+                  </Button>
+                </div>
+              )}
             </nav>
           )}
         </div>
