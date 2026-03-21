@@ -1,86 +1,55 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { mockBookings, mockFields } from '../data/mockData';
 import { TrendingUp, DollarSign, Calendar, BarChart3 } from 'lucide-react';
+import { dashboardService, type AdminAdvancedStatsResponse } from '../api/dashboard.service';
+import { toast } from 'sonner';
+import { format, subMonths } from 'date-fns';
 
 export function StatisticsPage() {
-  const statistics = useMemo(() => {
-    // Revenue statistics
-    const totalRevenue = mockBookings
-      .filter(b => b.status === 'COMPLETED')
-      .reduce((sum, b) => sum + b.totalPrice, 0);
+  const [loading, setLoading] = React.useState(true);
+  const [stats, setStats] = React.useState<AdminAdvancedStatsResponse | null>(null);
 
-    const pendingRevenue = mockBookings
-      .filter(b => b.status === 'PENDING' || b.status === 'CONFIRMED')
-      .reduce((sum, b) => sum + b.totalPrice, 0);
-
-    // Booking by status
-    const statusCounts = {
-      PENDING: mockBookings.filter(b => b.status === 'PENDING').length,
-      CONFIRMED: mockBookings.filter(b => b.status === 'CONFIRMED').length,
-      COMPLETED: mockBookings.filter(b => b.status === 'COMPLETED').length,
-      CANCELLED: mockBookings.filter(b => b.status === 'CANCELLED').length,
-      REJECTED: mockBookings.filter(b => b.status === 'REJECTED').length,
-    };
-
-    // Bookings by field
-    const fieldStats = mockFields.map(field => {
-      const fieldBookings = mockBookings.filter(b => b.fieldId === field.id);
-      const revenue = fieldBookings
-        .filter(b => b.status === 'COMPLETED')
-        .reduce((sum, b) => sum + b.totalPrice, 0);
-      
-      return {
-        name: field.name,
-        bookings: fieldBookings.length,
-        revenue: revenue,
-        completed: fieldBookings.filter(b => b.status === 'COMPLETED').length,
-        cancelled: fieldBookings.filter(b => b.status === 'CANCELLED' || b.status === 'REJECTED').length,
-      };
-    });
-
-    // Monthly revenue (mock data for visualization)
-    const monthlyRevenue = [
-      { month: 'T1', revenue: 15000000, bookings: 45 },
-      { month: 'T2', revenue: 18000000, bookings: 52 },
-      { month: 'T3', revenue: 22000000, bookings: 63 },
-      { month: 'T4', revenue: 20000000, bookings: 58 },
-      { month: 'T5', revenue: 25000000, bookings: 71 },
-      { month: 'T6', revenue: 28000000, bookings: 80 },
-    ];
-
-    // Peak hours (mock data)
-    const peakHours = [
-      { hour: '6-9h', bookings: 12 },
-      { hour: '9-12h', bookings: 8 },
-      { hour: '12-15h', bookings: 15 },
-      { hour: '15-18h', bookings: 28 },
-      { hour: '18-21h', bookings: 45 },
-      { hour: '21-24h', bookings: 18 },
-    ];
-
-    const cancelRate = (statusCounts.CANCELLED + statusCounts.REJECTED) / mockBookings.length * 100;
-
-    return {
-      totalRevenue,
-      pendingRevenue,
-      statusCounts,
-      fieldStats,
-      monthlyRevenue,
-      peakHours,
-      cancelRate,
-      totalBookings: mockBookings.length,
-    };
+  React.useEffect(() => {
+    fetchStats();
   }, []);
 
-  const statusData = [
-    { name: 'Chờ xác nhận', value: statistics.statusCounts.PENDING, color: '#f59e0b' },
-    { name: 'Đã xác nhận', value: statistics.statusCounts.CONFIRMED, color: '#10b981' },
-    { name: 'Hoàn thành', value: statistics.statusCounts.COMPLETED, color: '#3b82f6' },
-    { name: 'Đã hủy', value: statistics.statusCounts.CANCELLED + statistics.statusCounts.REJECTED, color: '#ef4444' },
-  ];
+  const fetchStats = async () => {
+    try {
+      setLoading(true);
+      const data = await dashboardService.getAdminStats();
+      setStats(data);
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+      toast.error('Không thể tải dữ liệu thống kê');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const statusData = React.useMemo(() => {
+    if (!stats) return [];
+    // Note: statusCounts was in mock, but AdminAdvancedStatsResponse has totalBookings and cancellationRate
+    // For a better UI, we can calculate some generic distribution or wait for better BE stats.
+    // However, for now, let's use what we have or adapt.
+    // The previous mock had: PENDING, CONFIRMED, COMPLETED, CANCELLED, REJECTED.
+    // Let's stick to simple ones for now.
+    return [
+      { name: 'Hoàn thành', value: stats.totalBookings - Math.round(stats.totalBookings * stats.cancellationRate / 100), color: '#3b82f6' },
+      { name: 'Đã hủy/từ chối', value: Math.round(stats.totalBookings * stats.cancellationRate / 100), color: '#ef4444' },
+    ];
+  }, [stats]);
+
+  if (loading || !stats) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  const avgPrice = stats.totalBookings > 0 ? stats.totalRevenue / stats.totalBookings : 0;
 
   return (
     <div className="space-y-8">
@@ -98,10 +67,10 @@ export function StatisticsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {statistics.totalRevenue.toLocaleString('vi-VN')}đ
+              {stats.totalRevenue.toLocaleString('vi-VN')}đ
             </div>
             <p className="text-xs text-muted-foreground">
-              +{statistics.pendingRevenue.toLocaleString('vi-VN')}đ chờ thanh toán
+              Toàn bộ thời gian
             </p>
           </CardContent>
         </Card>
@@ -112,9 +81,9 @@ export function StatisticsPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{statistics.totalBookings}</div>
+            <div className="text-2xl font-bold">{stats.totalBookings}</div>
             <p className="text-xs text-muted-foreground">
-              {statistics.statusCounts.COMPLETED} hoàn thành
+              Tất cả trạng thái
             </p>
           </CardContent>
         </Card>
@@ -125,9 +94,9 @@ export function StatisticsPage() {
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{statistics.cancelRate.toFixed(1)}%</div>
+            <div className="text-2xl font-bold">{stats.cancellationRate.toFixed(1)}%</div>
             <p className="text-xs text-muted-foreground">
-              {statistics.statusCounts.CANCELLED + statistics.statusCounts.REJECTED} lịch bị hủy
+              {Math.round(stats.totalBookings * stats.cancellationRate / 100)} lịch bị hủy
             </p>
           </CardContent>
         </Card>
@@ -139,7 +108,7 @@ export function StatisticsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {Math.round(statistics.totalRevenue / statistics.statusCounts.COMPLETED).toLocaleString('vi-VN')}đ
+              {Math.round(avgPrice).toLocaleString('vi-VN')}đ
             </div>
             <p className="text-xs text-muted-foreground">Giá trị trung bình</p>
           </CardContent>
@@ -164,7 +133,7 @@ export function StatisticsPage() {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={400}>
-                <LineChart data={statistics.monthlyRevenue}>
+                <LineChart data={stats.monthlyRevenue}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
@@ -190,40 +159,33 @@ export function StatisticsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Thống kê theo sân</CardTitle>
-              <CardDescription>Doanh thu và số lượng booking từng sân</CardDescription>
+              <CardDescription>Doanh thu từng sân</CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={statistics.fieldStats}>
+                <BarChart data={stats.revenueByPitch}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
+                  <XAxis dataKey="pitchName" />
+                  <YAxis />
                   <Tooltip
-                    formatter={(value: number, name: string) => {
-                      if (name === 'Doanh thu') {
-                        return `${value.toLocaleString('vi-VN')}đ`;
-                      }
-                      return value;
-                    }}
+                    formatter={(value: number) => `${value.toLocaleString('vi-VN')}đ`}
                   />
                   <Legend />
-                  <Bar yAxisId="left" dataKey="bookings" fill="#3b82f6" name="Số booking" />
-                  <Bar yAxisId="right" dataKey="revenue" fill="#10b981" name="Doanh thu" />
+                  <Bar dataKey="totalRevenue" fill="#10b981" name="Doanh thu" />
                 </BarChart>
               </ResponsiveContainer>
 
               <div className="mt-6 space-y-4">
-                {statistics.fieldStats.map((field) => (
-                  <div key={field.name} className="flex items-center justify-between p-4 border rounded-lg">
+                {stats.revenueByPitch.map((field) => (
+                  <div key={field.pitchId} className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
-                      <p className="font-medium">{field.name}</p>
+                      <p className="font-medium">{field.pitchName}</p>
                       <p className="text-sm text-gray-600">
-                        {field.bookings} booking • {field.completed} hoàn thành • {field.cancelled} hủy
+                        ID: {field.pitchId}
                       </p>
                     </div>
                     <p className="text-lg font-bold text-green-600">
-                      {field.revenue.toLocaleString('vi-VN')}đ
+                      {field.totalRevenue.toLocaleString('vi-VN')}đ
                     </p>
                   </div>
                 ))}
@@ -261,24 +223,6 @@ export function StatisticsPage() {
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
-
-              <div className="mt-6 grid grid-cols-2 gap-4">
-                {statusData.map((status) => (
-                  <div
-                    key={status.name}
-                    className="flex items-center gap-3 p-3 border rounded-lg"
-                  >
-                    <div
-                      className="w-4 h-4 rounded"
-                      style={{ backgroundColor: status.color }}
-                    />
-                    <div>
-                      <p className="text-sm text-gray-600">{status.name}</p>
-                      <p className="font-bold">{status.value}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -292,24 +236,21 @@ export function StatisticsPage() {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={statistics.peakHours}>
+                <BarChart data={stats.peakHours}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="hour" />
+                  <XAxis dataKey="hourRange" />
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="bookings" fill="#10b981" name="Số booking" />
+                  <Bar dataKey="bookingsCount" fill="#10b981" name="Số booking" />
                 </BarChart>
               </ResponsiveContainer>
 
               <div className="mt-6 space-y-2">
                 <h4 className="font-medium">Phân tích:</h4>
-                <ul className="space-y-1 text-sm text-gray-600">
-                  <li>• Khung giờ 18h-21h là cao điểm nhất với 45 booking</li>
-                  <li>• Khung giờ sáng 9h-12h ít khách nhất</li>
-                  <li>• Nên có chính sách ưu đãi cho khung giờ thấp điểm</li>
-                  <li>• Cân nhắc tăng giá vào khung 18h-21h</li>
-                </ul>
+                <p className="text-sm text-gray-600">
+                  Thống kê dựa trên dữ liệu thực tế từ hệ thống.
+                </p>
               </div>
             </CardContent>
           </Card>

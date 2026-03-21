@@ -9,14 +9,13 @@ import { Calendar } from '../components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { CalendarIcon, Clock, MapPin, DollarSign, Zap, Check, Loader2 } from 'lucide-react';
-import { mockBookings } from '../data/mockData';
 import { toast } from 'sonner';
 import { format, startOfDay } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useUnsplash } from '../hooks/useUnsplash';
 import { pitchService, Field as ApiField } from '../api/pitch.service';
-import { bookingService } from '../api/booking.service';
+import { bookingService, type BookingDetailResponse, type BookingResponse } from '../api/booking.service';
 
 export function BookFieldPage() {
   const [fields, setFields] = useState<ApiField[]>([]);
@@ -28,9 +27,36 @@ export function BookFieldPage() {
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [existingBookings, setExistingBookings] = useState<BookingDetailResponse[]>([]);
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
+
   useEffect(() => {
     fetchFields();
   }, []);
+
+  useEffect(() => {
+    if (selectedField && selectedDate) {
+      fetchExistingBookings();
+    }
+  }, [selectedField, selectedDate]);
+
+  const fetchExistingBookings = async () => {
+    try {
+      setIsCheckingAvailability(true);
+      const data = await bookingService.getPitchBookingsByDate(
+        parseInt(selectedField),
+        format(selectedDate!, 'yyyy-MM-dd')
+      );
+      // Flatten
+      const details: BookingDetailResponse[] = [];
+      data.forEach(b => details.push(...b.details));
+      setExistingBookings(details);
+    } catch (error) {
+      console.error('Failed to fetch existing bookings:', error);
+    } finally {
+      setIsCheckingAvailability(false);
+    }
+  };
 
   const fetchFields = async () => {
     try {
@@ -97,19 +123,15 @@ export function BookFieldPage() {
   };
 
   const isTimeSlotAvailable = (time: string): boolean => {
-    if (!selectedField || !selectedDate) return true;
+    if (!selectedField || !selectedDate || isCheckingAvailability) return true;
 
-    const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const endTime = calculateEndTime(time, duration);
 
     // Check if any booking conflicts with this time slot
-    const conflicts = mockBookings.filter(b => {
-      if (b.fieldId !== selectedField || b.date !== dateStr) return false;
-      if (b.status === 'CANCELLED' || b.status === 'REJECTED') return false;
-
+    const conflicts = existingBookings.filter(b => {
       // Check time overlap
-      const bookingStart = b.startTime;
-      const bookingEnd = b.endTime;
+      const bookingStart = b.startTime.substring(0, 5);
+      const bookingEnd = b.endTime.substring(0, 5);
 
       return (
         (time >= bookingStart && time < bookingEnd) ||

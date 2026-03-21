@@ -7,7 +7,6 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Building2, Plus, Edit, Wrench, Loader2 } from 'lucide-react';
-import { type Field } from '../data/mockData';
 import { toast } from 'sonner';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useUnsplash } from '../hooks/useUnsplash';
@@ -35,23 +34,22 @@ export function FieldsPage() {
     }
   };
 
-  const handleStatusChange = (fieldId: string, newStatus: Field['status']) => {
+  const handleStatusChange = (fieldId: string, newStatus: string) => {
     setFields(fields.map(f => 
       f.id === fieldId ? { ...f, status: newStatus } : f
-    ));
+    ) as ApiField[]);
     toast.success('Đã cập nhật trạng thái sân');
   };
 
-  const getStatusBadge = (status: Field['status']) => {
-    const variants = {
-      ACTIVE: { variant: 'default' as const, label: 'Hoạt động' },
-      MAINTENANCE: { variant: 'secondary' as const, label: 'Bảo trì' },
-      INACTIVE: { variant: 'destructive' as const, label: 'Ngừng hoạt động' },
+  const getStatusBadge = (status: string) => {
+    const variants: Record<string, { variant: "default" | "secondary" | "destructive", label: string }> = {
+      ACTIVE: { variant: 'default', label: 'Hoạt động' },
+      MAINTENANCE: { variant: 'secondary', label: 'Bảo trì' },
+      INACTIVE: { variant: 'destructive', label: 'Ngừng hoạt động' },
     };
-    const config = variants[status];
+    const config = variants[status?.toUpperCase()] || { variant: 'secondary', label: status || 'Không rõ' };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
-
   const getFieldPrices = (field: ApiField) => {
     return field.priceSlots || [];
   };
@@ -164,7 +162,7 @@ export function FieldsPage() {
                     <Label className="text-xs font-semibold uppercase text-slate-500">Trạng thái sân</Label>
                     <Select
                       value={field.status}
-                      onValueChange={(value) => handleStatusChange(field.id, value as Field['status'])}
+                      onValueChange={(value) => handleStatusChange(field.id, value)}
                     >
                       <SelectTrigger className="h-9">
                         <SelectValue />

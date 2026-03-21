@@ -52,6 +52,38 @@ export const bookingService = {
     throw new Error(response.message || 'Không thể tải danh sách đặt sân');
   },
 
+  async getUpcomingBookings(): Promise<BookingResponse[]> {
+    const response = await apiClient('/bookings/upcoming');
+    if (response.success) {
+      return response.data;
+    }
+    throw new Error(response.message || 'Không thể tải danh sách booking sắp tới');
+  },
+
+  async getHistoryBookings(): Promise<BookingResponse[]> {
+    const response = await apiClient('/bookings/history');
+    if (response.success) {
+      return response.data;
+    }
+    throw new Error(response.message || 'Không thể tải lịch sử đặt sân');
+  },
+
+  async getStaffDailyBookings(date?: string): Promise<BookingResponse[]> {
+    const response = await apiClient(`/bookings/staff/daily?date=${date || ''}`);
+    if (response.success) {
+      return response.data;
+    }
+    throw new Error(response.message || 'Không thể tải lịch sân theo ngày');
+  },
+
+  async getStaffPendingBookings(): Promise<BookingResponse[]> {
+    const response = await apiClient('/bookings/staff/pending');
+    if (response.success) {
+      return response.data;
+    }
+    throw new Error(response.message || 'Không thể tải danh sách chờ xử lý');
+  },
+
   async cancelBooking(detailId: number, reason: string): Promise<boolean> {
     const response = await apiClient(`/bookings/details/${detailId}/cancel`, {
       method: 'PUT',
@@ -61,5 +93,28 @@ export const bookingService = {
       return response.data;
     }
     throw new Error(response.message || 'Hủy đặt sân thất bại');
+  },
+
+  async confirmBooking(detailId: number): Promise<boolean> {
+    const response = await apiClient(`/bookings/staff/details/${detailId}/confirm`, {
+      method: 'PUT',
+    });
+    if (response.success) {
+      return response.data;
+    }
+    throw new Error(response.message || 'Xác nhận đặt sân thất bại');
+  },
+
+  async rejectBooking(detailId: number, reason: string): Promise<boolean> {
+    const response = await apiClient(`/bookings/staff/reject/${detailId}`, {
+      method: 'POST',
+      body: { reason }
+    });
+    return response.data;
+  },
+
+  getPitchBookingsByDate: async (pitchId: number, date: string): Promise<BookingResponse[]> => {
+    const response = await apiClient(`/bookings/pitch/${pitchId}/date/${date}`);
+    return response.data;
   }
 };
