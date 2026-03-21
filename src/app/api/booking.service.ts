@@ -32,6 +32,13 @@ export interface BookingDetailResponse {
   cancellationReason?: string;
 }
 
+export interface AvailabilitySlot {
+  startTime: string; // HH:mm:ss
+  endTime: string; // HH:mm:ss
+  isAvailable: boolean;
+  price: number;
+}
+
 export const bookingService = {
   async createBooking(request: BookingCreateRequest): Promise<BookingResponse> {
     const response = await apiClient('/bookings', {
@@ -95,26 +102,11 @@ export const bookingService = {
     throw new Error(response.message || 'Hủy đặt sân thất bại');
   },
 
-  async confirmBooking(detailId: number): Promise<boolean> {
-    const response = await apiClient(`/bookings/staff/details/${detailId}/confirm`, {
-      method: 'PUT',
-    });
+  async getAvailability(pitchId: number, playDate: string): Promise<AvailabilitySlot[]> {
+    const response = await apiClient(`/bookings/availability?pitchId=${pitchId}&playDate=${playDate}`);
     if (response.success) {
       return response.data;
     }
-    throw new Error(response.message || 'Xác nhận đặt sân thất bại');
-  },
-
-  async rejectBooking(detailId: number, reason: string): Promise<boolean> {
-    const response = await apiClient(`/bookings/staff/reject/${detailId}`, {
-      method: 'POST',
-      body: { reason }
-    });
-    return response.data;
-  },
-
-  getPitchBookingsByDate: async (pitchId: number, date: string): Promise<BookingResponse[]> => {
-    const response = await apiClient(`/bookings/pitch/${pitchId}/date/${date}`);
-    return response.data;
+    throw new Error(response.message || 'Không thể tải lịch trống');
   }
 };
