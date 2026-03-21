@@ -11,7 +11,8 @@ import {
   Eye, 
   UserPlus,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -75,6 +76,17 @@ export function StaffManagementPage() {
       toast.error(error.message || 'Thêm nhân viên thất bại');
     } finally {
       setAddLoading(false);
+    }
+  };
+
+  const handleDeleteStaff = async (id: number) => {
+    if (!confirm('Bạn có chắc chắn muốn vô hiệu hóa nhân viên này?')) return;
+    try {
+      await staffService.deleteStaff(id);
+      toast.success('Đã vô hiệu hóa nhân viên');
+      fetchStaffs();
+    } catch (error: any) {
+      toast.error(error.message || 'Xóa nhân viên thất bại');
     }
   };
 
@@ -227,14 +239,23 @@ export function StaffManagementPage() {
                   <span className="font-semibold">{staff.phone || 'Chưa cập nhật'}</span>
                 </div>
 
-                <Button 
-                  variant="outline" 
-                   onClick={() => navigate(`/staff/${staff.userId}`)}
-                  className="w-full h-11 rounded-xl border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 text-slate-700 hover:text-emerald-600 font-bold transition-all mt-2 gap-2"
-                >
-                  <Eye className="w-4 h-4" />
-                  Chi tiết & Phân công
-                </Button>
+                <div className="flex gap-2 mt-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => navigate(`/staff/${staff.userId}`)}
+                    className="flex-1 h-11 rounded-xl border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 text-slate-700 hover:text-emerald-600 font-bold transition-all gap-2"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Chi tiết
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => handleDeleteStaff(staff.userId)}
+                    className="w-11 h-11 rounded-xl border-slate-200 hover:border-red-500 hover:bg-red-50 text-slate-400 hover:text-red-600 transition-all p-0"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}

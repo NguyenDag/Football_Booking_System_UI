@@ -11,12 +11,36 @@ import { toast } from 'sonner';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useUnsplash } from '../hooks/useUnsplash';
 import { pitchService, Field as ApiField } from '../api/pitch.service';
+import { priceSlotService, PriceSlot } from '../api/price-slot.service';
+import { Clock, DollarSign, Trash2, Calendar } from 'lucide-react';
 
 export function FieldsPage() {
   const [fields, setFields] = useState<ApiField[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingField, setEditingField] = useState<ApiField | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Price slot management state
+  const [isPriceDialogOpen, setIsPriceDialogOpen] = useState(false);
+  const [selectedPitchForPrice, setSelectedPitchForPrice] = useState<ApiField | null>(null);
+  const [priceSlots, setPriceSlots] = useState<PriceSlot[]>([]);
+  const [loadingPrices, setLoadingPrices] = useState(false);
+  const [newPriceSlot, setNewPriceSlot] = useState({
+    startTime: '05:00',
+    endTime: '06:00',
+    pricePerHour: 200000,
+    applyOn: 'ALL' as 'WEEKDAY' | 'WEEKEND' | 'ALL',
+    isPeakHour: false
+  });
+
+  // Form state
+  const [formData, setFormData] = useState({
+    name: '',
+    type: '5' as '5' | '7' | '11',
+    description: '',
+    status: 'ACTIVE' as ApiField['status']
+  });
 
   useEffect(() => {
     fetchFields();
@@ -34,11 +58,132 @@ export function FieldsPage() {
     }
   };
 
-  const handleStatusChange = (fieldId: string, newStatus: string) => {
-    setFields(fields.map(f => 
-      f.id === fieldId ? { ...f, status: newStatus } : f
-    ) as ApiField[]);
-    toast.success('Đã cập nhật trạng thái sân');
+  const handleStatusChange = async (fieldId: string, newStatus: string) => {
+    try {
+      await pitchService.updatePitch(fieldId, { status: newStatus });
+      setFields(fields.map(f => 
+        f.id === fieldId ? { ...f, status: newStatus } : f
+      ) as ApiField[]);
+      toast.success('Đã cập nhật trạng thái sân');
+    } catch (error: any) {
+      toast.error(error.message || 'Cập nhật trạng thái thất bại');
+    }
+  };
+
+  const handleOpenAddDialog = () => {
+    setEditingField(null);
+    setFormData({ name: '', type: '5', description: '', status: 'ACTIVE' });
+    setIsDialogOpen(true);
+  };
+
+  const handleOpenEditDialog = (field: ApiField) => {
+    setEditingField(field);
+    setFormData({ 
+      name: field.name, 
+      type: field.type, 
+      description: field.description, 
+      status: field.status 
+    });
+    setIsDialogOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.name) {
+      toast.error('Vui lòng nhập tên sân');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const pitchTypeMap = {
+        '5': '5_PERSON',
+        '7': '7_PERSON',
+        '11': '11_PERSON'
+      };
+      
+      const payload = {
+        pitchName: formData.name,
+        pitchType: pitchTypeMap[formData.type],
+        status: formData.status,
+        description: formData.description
+      };
+
+      if (editingField) {
+        await pitchService.updatePitch(editingField.id, payload);
+        toast.success('Cập nhật sân thành công');
+      } else {
+        await pitchService.createPitch(payload);
+        toast.success('Thêm sân mới thành công');
+      }
+      setIsDialogOpen(false);
+      fetchFields();
+    } catch (error: any) {
+      toast.error(error.message || 'Thao tác thất bại');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleOpenPriceDialog = async (field: ApiField) => {
+    setSelectedPitchForPrice(field);
+    setIsPriceDialogOpen(true);
+    fetchPriceSlots(field.id);
+  };
+
+  const fetchPriceSlots = async (pitchId: string) => {
+    try {
+      setLoadingPrices(true);
+      const data = await priceSlotService.getByPitchId(pitchId);
+      setPriceSlots(data);
+    } catch (error: any) {
+      toast.error(error.message || 'Lỗi khi tải khung giá');
+    } finally {
+      setLoadingPrices(false);
+    }
+  };
+
+  const handleAddPriceSlot = async () => {
+    if (!selectedPitchForPrice) return;
+    
+    // Frontend validation for overlap
+    const start = newPriceSlot.startTime + ':00';
+    const end = newPriceSlot.endTime + ':00';
+    
+    const hasConflict = priceSlots.some(s => {
+      const sameDay = (s.applyOn === 'ALL' || newPriceSlot.applyOn === 'ALL') || (s.applyOn === newPriceSlot.applyOn);
+      const overlapTime = start < s.endTime && end > s.startTime;
+      return sameDay && overlapTime;
+    });
+
+    if (hasConflict) {
+      toast.error('Khung giờ này bị trùng với khung giờ hiện có!');
+      return;
+    }
+
+    try {
+      await priceSlotService.createSlot(selectedPitchForPrice.id, {
+        ...newPriceSlot,
+        startTime: start,
+        endTime: end,
+      });
+      toast.success('Đã thêm khung giá');
+      fetchPriceSlots(selectedPitchForPrice.id);
+      fetchFields(); // Refresh main list to show new prices
+    } catch (error: any) {
+      toast.error(error.message || 'Lỗi khi thêm khung giá');
+    }
+  };
+
+  const handleDeletePriceSlot = async (slotId: number) => {
+    try {
+      await priceSlotService.deleteSlot(slotId);
+      toast.success('Đã xóa khung giá');
+      if (selectedPitchForPrice) {
+        fetchPriceSlots(selectedPitchForPrice.id);
+        fetchFields();
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Lỗi khi xóa khung giá');
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -61,50 +206,221 @@ export function FieldsPage() {
           <h1 className="text-3xl font-bold">Quản lý sân bóng</h1>
           <p className="text-gray-600 mt-1">Quản lý thông tin và giá các sân</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" />
-              Thêm sân mới
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Thêm sân mới</DialogTitle>
-              <DialogDescription>Điền thông tin sân bóng mới</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Tên sân</Label>
-                <Input placeholder="VD: Sân E" />
-              </div>
-              <div>
-                <Label>Loại sân</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn loại sân" />
+        <Button className="gap-2" onClick={handleOpenAddDialog}>
+          <Plus className="w-4 h-4" />
+          Thêm sân mới
+        </Button>
+      </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>{editingField ? 'Sửa thông tin sân' : 'Thêm sân mới'}</DialogTitle>
+            <DialogDescription>
+              {editingField ? 'Cập nhật các thông tin của sân bóng.' : 'Điền thông tin sân bóng mới vào hệ thống.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="font-bold">Tên sân</Label>
+              <Input 
+                placeholder="VD: Sân E" 
+                value={formData.name}
+                onChange={e => setFormData({...formData, name: e.target.value})}
+                className="rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="font-bold">Loại sân</Label>
+              <Select 
+                value={formData.type}
+                onValueChange={(val: any) => setFormData({...formData, type: val})}
+              >
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="Chọn loại sân" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="5">5 người</SelectItem>
+                  <SelectItem value="7">7 người</SelectItem>
+                  <SelectItem value="11">11 người</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="font-bold">Mô tả</Label>
+              <Input 
+                placeholder="Mô tả về sân" 
+                value={formData.description}
+                onChange={e => setFormData({...formData, description: e.target.value})}
+                className="rounded-xl"
+              />
+            </div>
+            {editingField && (
+               <div className="space-y-2">
+                <Label className="font-bold">Trạng thái</Label>
+                <Select 
+                  value={formData.status}
+                  onValueChange={(val: any) => setFormData({...formData, status: val})}
+                >
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5 người</SelectItem>
-                    <SelectItem value="7">7 người</SelectItem>
-                    <SelectItem value="11">11 người</SelectItem>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="ACTIVE">Hoạt động</SelectItem>
+                    <SelectItem value="MAINTENANCE">Bảo trì</SelectItem>
+                    <SelectItem value="INACTIVE">Ngừng hoạt động</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Mô tả</Label>
-                <Input placeholder="Mô tả về sân" />
+            )}
+            <Button 
+              className="w-full bg-emerald-600 hover:bg-emerald-700 h-11 rounded-xl font-bold mt-2" 
+              onClick={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (editingField ? 'Cập nhật' : 'Thêm sân')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPriceDialogOpen} onOpenChange={setIsPriceDialogOpen}>
+        <DialogContent className="max-w-2xl rounded-3xl overflow-hidden p-0 border-none shadow-2xl">
+          <div className="bg-emerald-600 p-6 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                <DollarSign className="w-6 h-6" />
+                Cấu hình giá: {selectedPitchForPrice?.name}
+              </DialogTitle>
+              <DialogDescription className="text-emerald-100">
+                Thiết lập giá thuê sân theo các khung giờ khác nhau.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          
+          <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+            {/* Form thêm mới */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
+              <h4 className="font-bold flex items-center gap-2 text-slate-800">
+                <Plus className="w-4 h-4 text-emerald-600" />
+                Thêm khung giờ mới
+              </h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold uppercase text-slate-500">Từ</Label>
+                  <Input 
+                    type="time" 
+                    value={newPriceSlot.startTime}
+                    onChange={e => setNewPriceSlot({...newPriceSlot, startTime: e.target.value})}
+                    className="rounded-xl h-10"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold uppercase text-slate-500">Đến</Label>
+                  <Input 
+                    type="time" 
+                    value={newPriceSlot.endTime}
+                    onChange={e => setNewPriceSlot({...newPriceSlot, endTime: e.target.value})}
+                    className="rounded-xl h-10"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold uppercase text-slate-500">Giá (VNĐ/h)</Label>
+                  <Input 
+                    type="number" 
+                    step="10000"
+                    value={newPriceSlot.pricePerHour}
+                    onChange={e => setNewPriceSlot({...newPriceSlot, pricePerHour: parseInt(e.target.value)})}
+                    className="rounded-xl h-10"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                   <Label className="text-xs font-bold uppercase text-slate-500">Áp dụng</Label>
+                   <Select 
+                    value={newPriceSlot.applyOn}
+                    onValueChange={(val: any) => setNewPriceSlot({...newPriceSlot, applyOn: val})}
+                   >
+                     <SelectTrigger className="rounded-xl h-10">
+                        <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent className="rounded-xl">
+                        <SelectItem value="ALL">Cả tuần</SelectItem>
+                        <SelectItem value="WEEKDAY">Ngày thường</SelectItem>
+                        <SelectItem value="WEEKEND">Cuối tuần</SelectItem>
+                     </SelectContent>
+                   </Select>
+                </div>
               </div>
-              <Button className="w-full" onClick={() => {
-                toast.success('Đã thêm sân mới');
-                setIsDialogOpen(false);
-              }}>
-                Thêm sân
+              <Button 
+                onClick={handleAddPriceSlot}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 h-10 rounded-xl font-bold transition-all"
+              >
+                Lưu khung giá
               </Button>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+
+            {/* Danh sách hiện tại */}
+            <div className="space-y-3">
+              <h4 className="font-bold text-slate-800 flex items-center justify-between">
+                Khung giá hiện tại
+                <Badge variant="outline" className="text-xs font-normal text-slate-500">{priceSlots.length} khung</Badge>
+              </h4>
+              
+              {loadingPrices ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+                </div>
+              ) : priceSlots.length === 0 ? (
+                <div className="text-center py-10 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                  <Clock className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <p className="text-slate-500 font-medium">Chưa có khung giá nào cho sân này</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {priceSlots.map((slot) => (
+                    <div key={slot.priceSlotId} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:border-emerald-200 hover:shadow-md transition-all group">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600">
+                          <Clock className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">
+                            {slot.startTime.substring(0, 5)} - {slot.endTime.substring(0, 5)}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4">
+                              {slot.applyOn === 'ALL' ? 'Tất cả' : slot.applyOn === 'WEEKDAY' ? 'Thứ 2 - Thứ 6' : 'T7 & CN'}
+                            </Badge>
+                            {slot.isPeakHour && (
+                              <Badge className="bg-orange-100 text-orange-600 hover:bg-orange-100 text-[10px] py-0 px-1.5 h-4 border-none">
+                                Giờ cao điểm
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-4">
+                        <p className="text-lg font-black text-emerald-600">
+                          {slot.pricePerHour.toLocaleString('vi-VN')}đ
+                        </p>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleDeletePriceSlot(slot.priceSlotId)}
+                          className="text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all rounded-full"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -176,13 +492,21 @@ export function FieldsPage() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 gap-2 h-9 text-xs">
+                    <Button 
+                      variant="outline" 
+                      className="flex-1 gap-2 h-9 text-xs rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition-all"
+                      onClick={() => handleOpenEditDialog(field)}
+                    >
                       <Edit className="w-3.5 h-3.5" />
                       Sửa
                     </Button>
-                    <Button variant="outline" className="flex-1 gap-2 h-9 text-xs">
+                    <Button 
+                      variant="outline" 
+                      className="flex-1 gap-2 h-9 text-xs rounded-lg hover:border-blue-500 hover:text-blue-600 transition-all"
+                      onClick={() => handleOpenPriceDialog(field)}
+                    >
                       <Wrench className="w-3.5 h-3.5" />
-                      Giá
+                      Tiện ích
                     </Button>
                   </div>
                 </CardContent>

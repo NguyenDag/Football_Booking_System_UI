@@ -431,7 +431,7 @@ export function StaffDetailPage() {
                           <div className="flex items-center gap-5">
                              <div className="w-14 h-14 bg-white rounded-2xl flex flex-col items-center justify-center border border-slate-100 shadow-sm group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300">
                                 <span className="text-[10px] uppercase font-bold opacity-60">Thứ</span>
-                                <span className="text-xl font-extrabold">{shift.dayOfWeek + 1 === 8 ? 'CN' : shift.dayOfWeek + 1}</span>
+                                <span className="text-xl font-extrabold">{shift.dayOfWeek + 1 === 8 ? 'CN' : (shift.dayOfWeek + 1)}</span>
                              </div>
                              <div>
                                 <div className="flex items-center gap-2">

@@ -19,6 +19,20 @@ export interface Field {
   priceSlots?: PriceSlot[];
 }
 
+export interface CreatePitchRequest {
+  pitchName: string;
+  pitchType: string;
+  status: string;
+  description?: string;
+}
+
+export interface UpdatePitchRequest {
+  pitchName?: string;
+  pitchType?: string;
+  status?: string;
+  description?: string;
+}
+
 // Map backend PitchType string to frontend type
 const mapPitchType = (backendType: string): '5' | '7' | '11' => {
   if (backendType.includes('5')) return '5';
@@ -78,5 +92,44 @@ export const pitchService = {
       };
     }
     throw new Error(response.message || 'Failed to fetch pitch');
+  },
+
+  async createPitch(data: CreatePitchRequest): Promise<Field> {
+    const response = await apiClient('/pitches', {
+      method: 'POST',
+      body: data,
+    });
+    if (response.success) {
+      // Map back to Field
+      const p = response.data;
+      return {
+        id: p.pitchId.toString(),
+        name: p.pitchName,
+        type: mapPitchType(p.pitchType),
+        status: p.status as Field['status'],
+        description: p.description || '',
+        image: `football field ${mapPitchType(p.pitchType)} players`
+      };
+    }
+    throw new Error(response.message || 'Failed to create pitch');
+  },
+
+  async updatePitch(id: string, data: UpdatePitchRequest): Promise<void> {
+    const response = await apiClient(`/pitches/${id}`, {
+      method: 'PUT',
+      body: data,
+    });
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to update pitch');
+    }
+  },
+
+  async deletePitch(id: string): Promise<void> {
+    const response = await apiClient(`/pitches/${id}`, {
+      method: 'DELETE',
+    });
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to delete pitch');
+    }
   }
 };
