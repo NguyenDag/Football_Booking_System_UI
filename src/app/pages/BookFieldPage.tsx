@@ -15,8 +15,7 @@ import { vi } from 'date-fns/locale';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useUnsplash } from '../hooks/useUnsplash';
 import { pitchService, Field as ApiField } from '../api/pitch.service';
-import { bookingService, AvailabilitySlot } from '../api/booking.service';
-import { bookingService, type BookingDetailResponse, type BookingResponse } from '../api/booking.service';
+import { bookingService, type AvailabilitySlot, type BookingDetailResponse, type BookingResponse } from '../api/booking.service';
 
 export function BookFieldPage() {
   const [fields, setFields] = useState<ApiField[]>([]);
@@ -76,7 +75,7 @@ export function BookFieldPage() {
       );
       // Flatten
       const details: BookingDetailResponse[] = [];
-      data.forEach(b => details.push(...b.details));
+      data.forEach((b: BookingResponse) => details.push(...b.details));
       setExistingBookings(details);
     } catch (error) {
       console.error('Failed to fetch existing bookings:', error);
@@ -160,7 +159,7 @@ export function BookFieldPage() {
       );
     });
 
-    return true;
+    return conflicts.length === 0;
   };
 
   const handleBooking = async () => {

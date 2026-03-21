@@ -102,11 +102,40 @@ export const bookingService = {
     throw new Error(response.message || 'Hủy đặt sân thất bại');
   },
 
-  async getAvailability(pitchId: number, playDate: string): Promise<AvailabilitySlot[]> {
+   async getAvailability(pitchId: number, playDate: string): Promise<AvailabilitySlot[]> {
     const response = await apiClient(`/bookings/availability?pitchId=${pitchId}&playDate=${playDate}`);
     if (response.success) {
       return response.data;
     }
     throw new Error(response.message || 'Không thể tải lịch trống');
+  },
+
+  async getPitchBookingsByDate(pitchId: number, date: string): Promise<BookingResponse[]> {
+    const response = await apiClient(`/bookings/pitch/${pitchId}/date/${date}`);
+    if (response.success) {
+      return response.data;
+    }
+    throw new Error(response.message || 'Không thể tải lịch đặt sân');
+  },
+
+  async confirmBooking(detailId: number): Promise<boolean> {
+    const response = await apiClient(`/bookings/staff/details/${detailId}/confirm`, {
+      method: 'PUT'
+    });
+    if (response.success) {
+      return response.data;
+    }
+    throw new Error(response.message || 'Xác nhận thất bại');
+  },
+
+  async rejectBooking(detailId: number, reason: string): Promise<boolean> {
+    const response = await apiClient(`/bookings/staff/details/${detailId}/reject`, {
+      method: 'PUT',
+      body: { reason }
+    });
+    if (response.success) {
+      return response.data;
+    }
+    throw new Error(response.message || 'Từ chối thất bại');
   }
 };
