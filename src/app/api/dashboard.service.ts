@@ -9,6 +9,7 @@ export interface UpcomingBookingDto {
   price: number;
   status: string;
   customerName?: string;
+  customerPhone?: string;
 }
 
 export interface DashboardStatsResponse {
@@ -16,7 +17,10 @@ export interface DashboardStatsResponse {
   totalBookingsCount: number;
   completedBookingsCount: number;
   rejectedBookingsCount: number;
+  pendingBookingsCount: number;
+  totalManagedPitches: number;
   upcomingBookings: UpcomingBookingDto[];
+  pendingBookings: UpcomingBookingDto[];
 }
 
 export interface BookingsByDateDto {
@@ -61,7 +65,7 @@ export const dashboardService = {
     const params = new URLSearchParams();
     if (fromDate) params.append('fromDate', fromDate);
     if (toDate) params.append('toDate', toDate);
-    
+
     const response = await apiClient(`/dashboard/admin-stats?${params.toString()}`);
     return response.data;
   },

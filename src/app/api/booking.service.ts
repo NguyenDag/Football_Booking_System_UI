@@ -15,6 +15,9 @@ export interface BookingResponse {
   status: string;
   paymentStatus: string;
   notes?: string;
+  customerName?: string;
+  customerPhone?: string;
+
   createdAt: string;
   details: BookingDetailResponse[];
 }
@@ -89,6 +92,14 @@ export const bookingService = {
       return response.data;
     }
     throw new Error(response.message || 'Không thể tải danh sách chờ xử lý');
+  },
+
+  async getStaffAllBookings(date?: string): Promise<BookingResponse[]> {
+    const response = await apiClient(`/bookings/staff/all${date ? `?date=${date}` : ''}`);
+    if (response.success) {
+      return response.data;
+    }
+    throw new Error(response.message || 'Không thể tải tất cả danh sách đặt sân');
   },
 
   async cancelBooking(detailId: number, reason: string): Promise<boolean> {

@@ -15,14 +15,41 @@ import { format } from 'date-fns';
 
 export function BookingsPage() {
   const { user } = useAuth();
-  const [dailyBookings, setDailyBookings] = useState<BookingResponse[]>([]);
   const [pendingBookings, setPendingBookings] = useState<BookingResponse[]>([]);
+  const [allBookings, setAllBookings] = useState<BookingResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBookingDetail, setSelectedBookingDetail] = useState<BookingDetailResponse | null>(null);
   const [actionDialog, setActionDialog] = useState<'confirm' | 'reject' | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [activeTab, setActiveTab] = useState<string>('all');
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchTerm]);
+
+  const activeBookings = React.useMemo(() => {
+    let base = activeTab === 'pending' ? pendingBookings : allBookings;
+    const term = searchTerm.toLowerCase();
+    
+    if (term) {
+      base = base.filter(b => 
+        b.bookingId.toString().includes(term) ||
+        (b.customerName && b.customerName.toLowerCase().includes(term)) ||
+        (b.customerPhone && b.customerPhone.includes(term))
+      );
+    }
+    return base;
+  }, [activeTab, pendingBookings, allBookings, searchTerm]);
+
+  const totalPages = Math.ceil(activeBookings.length / itemsPerPage) || 1;
+  const paginatedBookings = activeBookings.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   useEffect(() => {
     fetchData();
@@ -31,12 +58,12 @@ export function BookingsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [daily, pending] = await Promise.all([
-        bookingService.getStaffDailyBookings(selectedDate),
-        bookingService.getStaffPendingBookings()
+      const [pending, all] = await Promise.all([
+        bookingService.getStaffPendingBookings(),
+        bookingService.getStaffAllBookings(selectedDate)
       ]);
-      setDailyBookings(daily);
       setPendingBookings(pending);
+      setAllBookings(all);
     } catch (error) {
       console.error('Failed to fetch bookings:', error);
       toast.error('Không thể tải danh sách đặt sân');
@@ -111,11 +138,14 @@ export function BookingsPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 py-2 border-y border-gray-50">
           <div>
             <p className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Khách hàng</p>
-            <p className="font-medium text-sm">USER-{booking.userId}</p>
+            <p className="font-medium text-sm">
+              {booking.customerName || `USER-${booking.userId}`}
+              {booking.customerPhone && <span className="ml-1 text-gray-400 font-mono text-xs">({booking.customerPhone})</span>}
+            </p>
           </div>
           <div>
             <p className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Ngày đá</p>
-            <p className="font-medium text-sm">{detail?.playDate}</p>
+            <p className="font-medium text-sm">{detail?.playDate ? format(new Date(detail.playDate), 'dd/MM/yyyy') : 'N/A'}</p>
           </div>
           <div>
             <p className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Thời gian</p>
@@ -168,6 +198,7 @@ export function BookingsPage() {
             </Button>
           </div>
         )}
+        
       </div>
     );
   };
@@ -179,11 +210,40 @@ export function BookingsPage() {
         <p className="text-gray-600 mt-1">Xem và xử lý các đặt lịch sân</p>
       </div>
 
-      {/* Search and Date Picker */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="shadow-md border-emerald-100">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <CalendarIcon className="w-5 h-5 text-emerald-600" />
+              Chọn ngày xem lịch
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3">
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="flex-1"
+              />
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => setSelectedDate('')}
+                title="Xem tất cả"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Tìm kiếm nhanh</CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Search className="w-5 h-5 text-blue-600" />
+              Tìm kiếm nhanh
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="relative">
@@ -197,38 +257,16 @@ export function BookingsPage() {
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Chọn ngày xem lịch</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2">
-              <div className="flex-1 relative">
-                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <Button variant="outline" size="icon" onClick={() => setSelectedDate(format(new Date(), 'yyyy-MM-dd'))} title="Hôm nay">
-                <RotateCcw className="w-4 h-4" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Bookings Tabs */}
-      <Tabs defaultValue="daily" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto mb-6">
-          <TabsTrigger value="daily" className="relative">
-            Lịch sân ngày {format(new Date(selectedDate), 'dd/MM')}
-            {dailyBookings.length > 0 && (
-              <Badge className="ml-2 bg-blue-100 text-blue-700 hover:bg-blue-100 border-none px-1.5 py-0 min-w-5 justify-center">
-                {dailyBookings.length}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 max-w-sm mx-auto mb-6">
+          <TabsTrigger value="all" className="relative">
+            Tất cả lịch
+            {allBookings.length > 0 && (
+              <Badge variant="outline" className="ml-2 px-1.5 py-0 min-w-5 justify-center">
+                {allBookings.length}
               </Badge>
             )}
           </TabsTrigger>
@@ -242,41 +280,19 @@ export function BookingsPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="daily" className="space-y-4 mt-2">
-          {loading ? (
-             <div className="flex items-center justify-center py-20">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : (
-            <>
-              {dailyBookings
-                .filter(b => b.bookingId.toString().includes(searchTerm) || b.userId.toString().includes(searchTerm))
-                .map(booking => (
-                  <BookingCard key={booking.bookingId} booking={booking} />
-                ))}
-              {dailyBookings.length === 0 && (
-                <div className="text-center py-20 border-2 border-dashed rounded-xl bg-gray-50">
-                  <CalendarIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500 font-medium">Không có lịch đặt trong ngày này</p>
-                </div>
-              )}
-            </>
-          )}
-        </TabsContent>
+
 
         <TabsContent value="pending" className="space-y-4 mt-2">
-           {loading ? (
-             <div className="flex items-center justify-center py-20">
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           ) : (
             <>
-              {pendingBookings
-                .filter(b => b.bookingId.toString().includes(searchTerm) || b.userId.toString().includes(searchTerm))
-                .map(booking => (
-                  <BookingCard key={booking.bookingId} booking={booking} />
-                ))}
-              {pendingBookings.length === 0 && (
+              {activeTab === 'pending' && paginatedBookings.map(booking => (
+                <BookingCard key={booking.bookingId} booking={booking} />
+              ))}
+              {activeTab === 'pending' && activeBookings.length === 0 && (
                 <div className="text-center py-20 border-2 border-dashed rounded-xl bg-gray-50">
                   <Check className="w-12 h-12 text-green-300 mx-auto mb-4" />
                   <p className="text-gray-500 font-medium">Tuyệt vời! Không còn booking nào chờ xử lý</p>
@@ -285,7 +301,53 @@ export function BookingsPage() {
             </>
           )}
         </TabsContent>
+
+        <TabsContent value="all" className="space-y-4 mt-2">
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'all' && paginatedBookings.map(booking => (
+                <BookingCard key={booking.bookingId} booking={booking} />
+              ))}
+              {activeTab === 'all' && activeBookings.length === 0 && (
+                <div className="text-center py-20 border-2 border-dashed rounded-xl bg-gray-50">
+                  <Filter className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 font-medium">Chưa có dữ liệu đặt sân nào</p>
+                </div>
+              )}
+            </>
+          )}
+        </TabsContent>
       </Tabs>
+
+      {!loading && activeBookings.length > itemsPerPage && (
+        <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
+          <p className="text-sm text-slate-500">
+            Hiển thị trang <span className="font-medium text-slate-900">{currentPage}</span> / {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              Trước
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Sau
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Confirm Dialog */}
       <Dialog open={actionDialog === 'confirm'} onOpenChange={() => setActionDialog(null)}>
@@ -293,7 +355,7 @@ export function BookingsPage() {
           <DialogHeader>
             <DialogTitle>Xác nhận booking</DialogTitle>
             <DialogDescription>
-              Bạn có chắc chắn muốn xác nhận đặt sân lúc <strong>{selectedBookingDetail?.startTime.substring(0, 5)}</strong> ngày <strong>{selectedBookingDetail?.playDate}</strong>?
+              Bạn có chắc chắn muốn xác nhận đặt sân lúc <strong>{selectedBookingDetail?.startTime.substring(0, 5)}</strong> ngày <strong>{selectedBookingDetail?.playDate ? format(new Date(selectedBookingDetail.playDate), 'dd/MM/yyyy') : 'N/A'}</strong>?
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-3 mt-4">

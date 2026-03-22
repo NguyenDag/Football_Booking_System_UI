@@ -74,12 +74,13 @@ export function DashboardPage() {
 
   const stats = React.useMemo(() => {
     return {
-      totalFields: fields.filter(f => f.status === 'ACTIVE').length,
+      totalFields: user?.role === 'STAFF' ? (statsData?.totalManagedPitches || 0) : fields.filter(f => f.status === 'ACTIVE').length,
       totalBookings: statsData?.totalBookingsCount || 0,
       upcomingConfirmed: statsData?.upcomingConfirmedCount || 0,
       completedBookings: statsData?.completedBookingsCount || 0,
+      pendingBookings: statsData?.pendingBookingsCount || 0,
     };
-  }, [fields, statsData]);
+  }, [fields, statsData, user?.role]);
 
   const filteredBookings = React.useMemo(() => {
     const now = new Date();
@@ -208,7 +209,7 @@ export function DashboardPage() {
                       {getStatusBadge(booking.status)}
                     </div>
                     <p className="text-sm text-slate-600">
-                      👤 {booking.customerName} • 📅 {booking.playDate} • ⏰ {booking.startTime.substring(0, 5)} - {booking.endTime.substring(0, 5)}
+                      👤 {booking.customerName} • 📅 {booking.playDate ? format(new Date(booking.playDate), 'dd/MM/yyyy') : 'N/A'} • ⏰ {booking.startTime.substring(0, 5)} - {booking.endTime.substring(0, 5)}
                     </p>
                   </div>
                   <p className="text-lg font-bold text-emerald-600 whitespace-nowrap ml-4">
@@ -234,7 +235,7 @@ export function DashboardPage() {
   }
 
   if (user?.role === 'STAFF') {
-    const staffBookings = recentBookings.filter(b => b.status === 'PENDING');
+    const staffBookings = statsData?.pendingBookings || [];
 
     return (
       <div className="space-y-8">
@@ -245,27 +246,20 @@ export function DashboardPage() {
           <p className="text-slate-600">Xin chào, {user.fullName}! 👋</p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          <StatCard
-            title="Lịch sắp tới"
-            icon={Calendar}
-            value={stats.upcomingConfirmed}
-            description="Đặt lịch đã xác nhận"
-            bgColor="bg-gradient-to-br from-blue-50/80 to-blue-100/50"
-          />
-          <StatCard
-            title="Tổng booking"
-            icon={TrendingUp}
-            value={stats.totalBookings}
-            description="Tất cả đặt lịch"
-            bgColor="bg-gradient-to-br from-amber-50/80 to-amber-100/50"
-          />
+        <div className="grid gap-6 md:grid-cols-2">
           <StatCard
             title="Sân quản lý"
             icon={Building2}
             value={stats.totalFields}
             description="Đang hoạt động"
-            bgColor="bg-gradient-to-br from-purple-50/80 to-purple-100/50"
+            bgColor="bg-gradient-to-br from-blue-50/80 to-blue-100/50"
+          />
+          <StatCard
+            title="Tổng booking đang chờ"
+            icon={Clock}
+            value={stats.pendingBookings}
+            description="Cần xác nhận"
+            bgColor="bg-gradient-to-br from-amber-50/80 to-amber-100/50"
           />
         </div>
 
@@ -280,7 +274,7 @@ export function DashboardPage() {
                   <div className="space-y-1 flex-1">
                     <p className="font-semibold text-slate-900">{booking.pitchName}</p>
                     <p className="text-sm text-slate-600">
-                      👤 {booking.customerName} • 📅 {booking.playDate} • ⏰ {booking.startTime.substring(0, 5)}
+                      👤 {booking.customerName} {booking.customerPhone && <span className="ml-1 text-slate-400 font-mono text-xs">({booking.customerPhone})</span>} • 📅 {booking.playDate ? format(new Date(booking.playDate), 'dd/MM/yyyy') : 'N/A'} • ⏰ {booking.startTime.substring(0, 5)}
                     </p>
                   </div>
                   <Link to="/bookings">
