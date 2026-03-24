@@ -119,7 +119,16 @@ export const staffService = {
       method: 'DELETE',
     });
     if (!response.success) {
-      throw new Error(response.message || 'Xóa nhân viên thất bại');
+      throw new Error(response.message || 'Vô hiệu hóa nhân viên thất bại');
+    }
+  },
+
+  async hardDeleteStaff(id: number): Promise<void> {
+    const response = await apiClient(`/admin/staff/${id}/permanent`, {
+      method: 'DELETE',
+    });
+    if (!response.success) {
+      throw new Error(response.message || 'Xóa vĩnh viễn nhân viên thất bại');
     }
   },
 
