@@ -1,5 +1,5 @@
-const BASE_URL = 'http://localhost:5252/api';
-//const BASE_URL = 'https://localhost:7290/api';
+// const BASE_URL = 'http://localhost:5252/api';
+const BASE_URL = 'https://localhost:7290/api';
 
 interface ApiOptions extends Omit<RequestInit, 'body'> {
   body?: any;

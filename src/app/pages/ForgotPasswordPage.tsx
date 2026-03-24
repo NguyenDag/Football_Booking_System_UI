@@ -13,7 +13,7 @@ export function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { forgotPassword } = useAuth();
+  const { sendOtp } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -21,10 +21,10 @@ export function ForgotPasswordPage() {
     setError('');
     setLoading(true);
 
-    const result = await forgotPassword(email);
+    const result = await sendOtp(email);
 
     if (result.success) {
-      toast.success('Yêu cầu đã được gửi. Vui lòng kiểm tra email (hoặc console logs) để lấy mã OTP.');
+      toast.success('Yêu cầu đã được gửi. Vui lòng kiểm tra email để lấy mã OTP.');
       // Chuyển sang trang reset password và truyền email qua state
       navigate('/reset-password', { state: { email } });
     } else {

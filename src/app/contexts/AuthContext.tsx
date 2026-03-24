@@ -16,7 +16,8 @@ interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   register: (data: any) => Promise<{ success: boolean; message?: string }>;
-  forgotPassword: (email: string) => Promise<{ success: boolean; message?: string }>;
+  sendOtp: (email: string) => Promise<{ success: boolean; message?: string }>;
+  verifyOtp: (email: string, otp: string) => Promise<{ success: boolean; data?: string; message?: string }>;
   resetPassword: (data: any) => Promise<{ success: boolean; message?: string }>;
   updateProfile: (data: any) => Promise<{ success: boolean; message?: string }>;
   changePassword: (data: any) => Promise<{ success: boolean; message?: string }>;
@@ -77,13 +78,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const forgotPassword = async (email: string): Promise<{ success: boolean; message?: string }> => {
+  const sendOtp = async (email: string): Promise<{ success: boolean; message?: string }> => {
     try {
-      await authService.forgotPassword(email);
+      await authService.sendOtp(email);
       return { success: true };
     } catch (error: any) {
-      console.error('Forgot password error:', error);
-      const errorMessage = error.message || 'Yêu cầu không thành công';
+      console.error('Send OTP error:', error);
+      const errorMessage = error.message || 'Yêu cầu gửi mã OTP không thành công';
+      return { success: false, message: errorMessage };
+    }
+  };
+
+  const verifyOtp = async (email: string, otp: string): Promise<{ success: boolean; data?: string; message?: string }> => {
+    try {
+      const resetToken = await authService.verifyOtp(email, otp);
+      return { success: true, data: resetToken };
+    } catch (error: any) {
+      console.error('Verify OTP error:', error);
+      const errorMessage = error.message || 'Xác minh OTP không thành công';
       return { success: false, message: errorMessage };
     }
   };
@@ -133,7 +145,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         login,
         register,
-        forgotPassword,
+        sendOtp,
+        verifyOtp,
         resetPassword,
         updateProfile,
         changePassword,

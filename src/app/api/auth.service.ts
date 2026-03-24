@@ -84,15 +84,26 @@ export const authService = {
     throw new Error(response.message || 'Không thể lấy thông tin người dùng');
   },
 
-  async forgotPassword(email: string): Promise<any> {
-    const response = await apiClient('/auth/forgot-password', {
+  async sendOtp(email: string): Promise<any> {
+    const response = await apiClient('/auth/send-otp', {
       method: 'POST',
       body: { email },
     });
     if (response.success) {
       return response;
     }
-    throw new Error(response.message || 'Yêu cầu đặt lại mật khẩu thất bại');
+    throw new Error(response.message || 'Yêu cầu gửi mã OTP thất bại');
+  },
+
+  async verifyOtp(email: string, otp: string): Promise<string> {
+    const response = await apiClient('/auth/verify-otp', {
+      method: 'POST',
+      body: { email, otp },
+    });
+    if (response.success && response.data?.reset_token) {
+      return response.data.reset_token;
+    }
+    throw new Error(response.message || 'Mã OTP không đúng hoặc đã hết hạn');
   },
 
   async resetPassword(data: ResetPasswordRequest): Promise<any> {
