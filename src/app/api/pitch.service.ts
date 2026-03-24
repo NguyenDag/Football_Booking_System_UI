@@ -25,6 +25,7 @@ export interface CreatePitchRequest {
   pitchType: string;
   status: string;
   description?: string;
+  imageUrl?: string;
 }
 
 export interface UpdatePitchRequest {
@@ -32,6 +33,7 @@ export interface UpdatePitchRequest {
   pitchType?: string;
   status?: string;
   description?: string;
+  imageUrl?: string;
 }
 
 // Map backend PitchType string to frontend type
@@ -57,7 +59,7 @@ export const pitchService = {
         type: mapPitchType(p.pitchType),
         status: p.status as Field['status'],
         description: p.description || '',
-        image: `football field ${mapPitchType(p.pitchType)} players`, // Use name/type for Unsplash query
+        image: p.imageUrl || `football field ${mapPitchType(p.pitchType)} players`, // Use existing image or name/type for Unsplash query
         priceSlots: p.priceSlots?.map((ps: any) => ({
           id: ps.priceSlotId.toString(),
           fieldId: p.pitchId.toString(),
@@ -82,7 +84,7 @@ export const pitchService = {
         type: mapPitchType(p.pitchType),
         status: p.status as Field['status'],
         description: p.description || '',
-        image: `football field ${mapPitchType(p.pitchType)} players`,
+        image: p.imageUrl || `football field ${mapPitchType(p.pitchType)} players`,
         priceSlots: p.priceSlots?.map((ps: any) => ({
           id: ps.priceSlotId.toString(),
           fieldId: p.pitchId.toString(),
@@ -111,7 +113,7 @@ export const pitchService = {
         type: mapPitchType(p.pitchType),
         status: p.status as Field['status'],
         description: p.description || '',
-        image: `football field ${mapPitchType(p.pitchType)} players`
+        image: p.imageUrl || `football field ${mapPitchType(p.pitchType)} players`
       };
     }
     throw new Error(response.message || 'Failed to create pitch');
