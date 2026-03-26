@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Label } from '../components/ui/label';
-import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Calendar } from '../components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
@@ -16,12 +15,13 @@ import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useUnsplash } from '../hooks/useUnsplash';
 import { pitchService, Field as ApiField } from '../api/pitch.service';
 import { bookingService, type AvailabilitySlot, type BookingDetailResponse, type BookingResponse } from '../api/booking.service';
+import { cn } from '../components/ui/utils';
 
 export function BookFieldPage() {
   const [fields, setFields] = useState<ApiField[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedField, setSelectedField] = useState<string>('');
-  const [selectedDate, setSelectedDate] = useState<Date>();
+  const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
   const [startTime, setStartTime] = useState<string>('');
   const [duration, setDuration] = useState<60 | 90 | 120>(90);
   const [note, setNote] = useState('');
@@ -220,7 +220,7 @@ export function BookFieldPage() {
 
       // Reset form
       setSelectedField('');
-      setSelectedDate(undefined);
+      setSelectedDate(startOfDay(new Date()));
       setStartTime('');
       setDuration(90);
       setNote('');
@@ -314,22 +314,29 @@ export function BookFieldPage() {
               {/* Date Picker */}
               <div className="space-y-3">
                 <Label className="text-slate-700 font-semibold">📅 Ngày đá</Label>
-                <div className="relative">
-                  <Input
-                    type="date"
-                    value={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      const val = e.target.value;
-                      setSelectedDate(val ? new Date(val) : undefined);
-                    }}
-                    min={format(new Date(), 'yyyy-MM-dd')}
-                    className="h-12 border-slate-200 hover:border-emerald-300 focus:border-emerald-400 pl-11 text-base font-medium transition-all"
-                  />
-                  <CalendarIcon className="absolute left-3.5 top-3.5 h-5 w-5 text-emerald-500 pointer-events-none" />
-                  <div className="absolute right-3.5 top-3.5 text-xs text-slate-400 pointer-events-none font-medium uppercase tracking-wider">
-                    {selectedDate ? format(selectedDate, 'dd/MM/yyyy') : 'Chọn ngày'}
-                  </div>
-                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full h-12 justify-start text-left font-medium border-slate-200 hover:border-emerald-300 hover:bg-white px-4 text-base transition-all",
+                        !selectedDate && "text-slate-400"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-5 w-5 text-emerald-500" />
+                      {selectedDate ? format(selectedDate, 'dd/MM/yyyy') : <span>Chọn ngày đá</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={(date) => date && setSelectedDate(date)}
+                      disabled={(date) => date < startOfDay(new Date())}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
 
               {/* Time Selection */}
