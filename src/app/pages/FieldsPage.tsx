@@ -685,11 +685,15 @@ export function FieldsPage() {
 
 function FieldImage({ query }: { query: string }) {
   const imageUrl = useUnsplash(query);
+  
   return (
-    <ImageWithFallback
-      src={imageUrl}
-      alt="Football field"
-      className="w-full h-full object-cover"
-    />
+    <div className="relative w-full h-full group">
+      <ImageWithFallback
+        src={imageUrl}
+        alt="Football field"
+        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+      />
+      <div className="absolute inset-0 bg-black/5 group-hover:bg-black/0 transition-colors duration-300" />
+    </div>
   );
 }

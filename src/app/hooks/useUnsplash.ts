@@ -16,9 +16,15 @@ export function useUnsplash(query: string): string {
       return;
     }
 
-    // Otherwise, create a stable Unsplash URL based on the query
+    // Otherwise, create a stable Unsplash URL based on the query or return a static fallback
+    if (query.length < 5) {
+      setImageUrl('https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=800&auto=format&fit=crop');
+      return;
+    }
+    
+    // Use a more stable keyword-based Unsplash URL if no direct URL
     const searchQuery = encodeURIComponent(query);
-    setImageUrl(`https://source.unsplash.com/800x600/?${searchQuery}`);
+    setImageUrl(`https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=800&auto=format&fit=crop&sig=${searchQuery}`);
   }, [query]);
 
   return imageUrl;

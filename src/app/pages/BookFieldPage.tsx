@@ -34,6 +34,12 @@ export function BookFieldPage() {
 
   useEffect(() => {
     fetchFields();
+    // Check for pitchId in URL
+    const params = new URLSearchParams(window.location.search);
+    const pitchId = params.get('pitchId');
+    if (pitchId) {
+      setSelectedField(pitchId);
+    }
   }, []);
 
   useEffect(() => {

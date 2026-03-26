@@ -7,7 +7,9 @@ import { Button } from '../components/ui/button';
 import { Link } from 'react-router-dom';
 import { pitchService, Field as ApiField } from '../api/pitch.service';
 import { dashboardService, DashboardStatsResponse } from '../api/dashboard.service';
-import { bookingService, BookingDetailResponse, BookingResponse } from '../api/booking.service';
+import { bookingService, type BookingResponse, type BookingDetailResponse } from '../api/booking.service';
+import { signalRService } from '../api/signalr.service';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
@@ -31,8 +33,41 @@ export function DashboardPage() {
 
   // Interaction states
   const [activeFilter, setActiveFilter] = React.useState<'UPCOMING' | 'TOTAL' | 'COMPLETED'>('UPCOMING');
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState('ALL');
+  const [sortConfig, setSortConfig] = React.useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [selectedBooking, setSelectedBooking] = React.useState<FlatBooking | null>(null);
+  const [now, setNow] = React.useState(new Date());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  React.useEffect(() => {
+    signalRService.startConnection();
+
+    const handleUpdate = () => {
+      fetchData();
+    };
+
+    signalRService.on('NewBooking', (booking: any) => {
+      if (user?.role === 'ADMIN' || user?.role === 'STAFF') {
+        toast.info(`🔔 New Booking: ${booking.customerName || 'Guest'}`, { 
+          description: booking.details[0]?.pitchName,
+          duration: 5000 
+        });
+      }
+      handleUpdate();
+    });
+    signalRService.on('BookingStatusChanged', handleUpdate);
+
+    return () => {
+      signalRService.off('NewBooking', handleUpdate);
+      signalRService.off('BookingStatusChanged', handleUpdate);
+    };
+  }, [user]);
 
   const itemsPerPage = 5;
 
@@ -87,16 +122,54 @@ export function DashboardPage() {
     let result = bookings;
     
     if (activeFilter === 'UPCOMING') {
-      result = bookings.filter(b => {
+      result = result.filter(b => {
         const bookingDate = new Date(b.playDate + 'T' + b.startTime);
         return b.status.toUpperCase() === 'CONFIRMED' && bookingDate >= now;
       });
     } else if (activeFilter === 'COMPLETED') {
-      result = bookings.filter(b => b.status.toUpperCase() === 'COMPLETED');
+      result = result.filter(b => b.status.toUpperCase() === 'COMPLETED');
+    }
+
+    // Search
+    if (searchTerm) {
+      result = result.filter(b => 
+        b.pitchName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        `FB-${b.detailId}`.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Status Filter (additional)
+    if (statusFilter !== 'ALL') {
+      result = result.filter(b => b.status.toUpperCase() === statusFilter);
+    }
+
+    // Sorting
+    if (sortConfig) {
+      result = [...result].sort((a, b) => {
+        let aValue: any = a[sortConfig.key as keyof FlatBooking];
+        let bValue: any = b[sortConfig.key as keyof FlatBooking];
+
+        if (sortConfig.key === 'playDate') {
+          aValue = new Date(a.playDate + 'T' + a.startTime).getTime();
+          bValue = new Date(b.playDate + 'T' + b.startTime).getTime();
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
     }
     
     return result;
-  }, [bookings, activeFilter]);
+  }, [bookings, activeFilter, searchTerm, statusFilter, sortConfig, now]);
+
+  const requestSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const totalPages = Math.ceil(filteredBookings.length / itemsPerPage) || 1;
   const paginatedBookings = filteredBookings.slice(
@@ -106,7 +179,7 @@ export function DashboardPage() {
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [activeFilter]);
+  }, [activeFilter, searchTerm, statusFilter]);
 
   const recentBookings = statsData?.upcomingBookings || [];
 
@@ -269,21 +342,51 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {staffBookings.map((booking) => (
-                <div key={booking.detailId} className="flex items-center justify-between p-4 border border-amber-200/50 bg-amber-50/30 rounded-xl">
-                  <div className="space-y-1 flex-1">
-                    <p className="font-semibold text-slate-900">{booking.pitchName}</p>
-                    <p className="text-sm text-slate-600">
-                      👤 {booking.customerName} {booking.customerPhone && <span className="ml-1 text-slate-400 font-mono text-xs">({booking.customerPhone})</span>} • 📅 {booking.playDate ? format(new Date(booking.playDate), 'dd/MM/yyyy') : 'N/A'} • ⏰ {booking.startTime.substring(0, 5)}
-                    </p>
+              {staffBookings.map((booking) => {
+                const bookingDate = new Date(booking.playDate + 'T' + booking.startTime);
+                const hoursUntil = (bookingDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+                const isLate = hoursUntil > 0 && hoursUntil <= 1;
+                const minsUntilAutoCancel = hoursUntil !== null ? Math.floor(hoursUntil * 60 - 30) : 0;
+
+                return (
+                  <div 
+                    key={booking.detailId} 
+                    className={cn(
+                      "flex items-center justify-between p-4 border rounded-xl transition-all",
+                      isLate 
+                        ? "border-red-300 bg-red-50 shadow-sm animate-pulse-subtle" 
+                        : "border-amber-200/50 bg-amber-50/30"
+                    )}
+                  >
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900">{booking.pitchName}</p>
+                        {isLate && (
+                          <Badge variant="destructive" className="text-[10px] h-4 px-1 animate-bounce">KHẨN CẤP</Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-slate-600">
+                        👤 {booking.customerName} {booking.customerPhone && <span className="ml-1 text-slate-400 font-mono text-xs">({booking.customerPhone})</span>} • 📅 {booking.playDate ? format(new Date(booking.playDate), 'dd/MM/yyyy') : 'N/A'} • ⏰ {booking.startTime.substring(0, 5)}
+                      </p>
+                      {isLate && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-[10px] text-red-600 font-bold uppercase tracking-tight">Sắp quá hạn xác nhận</p>
+                          {minsUntilAutoCancel > 0 && (
+                            <Badge variant="outline" className="text-[9px] h-4 px-1 border-red-200 text-red-500 bg-white">
+                              Hủy sau: {minsUntilAutoCancel}'
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <Link to="/bookings">
+                      <Button size="sm" className={cn("bg-gradient-to-r", isLate ? "from-red-500 to-red-600" : "from-emerald-500 to-emerald-600")}>
+                        Xử lý
+                      </Button>
+                    </Link>
                   </div>
-                  <Link to="/bookings">
-                    <Button size="sm" className="bg-gradient-to-r from-emerald-500 to-emerald-600">
-                      Xử lý
-                    </Button>
-                  </Link>
-                </div>
-              ))}
+                );
+              })}
               {staffBookings.length === 0 && (
                 <div className="text-center py-12">
                   <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
@@ -351,7 +454,18 @@ export function DashboardPage() {
             </CardDescription>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="relative group">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
+              <input
+                type="text"
+                placeholder="Tìm sân hoặc mã..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 h-9 w-48 text-xs rounded-lg border border-slate-200 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-sm"
+              />
+            </div>
+            
             <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border">
               <Button 
                 variant="ghost" 
@@ -382,10 +496,16 @@ export function DashboardPage() {
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="bg-slate-50/50 text-slate-500 border-b uppercase text-[10px] tracking-wider font-bold">
-                  <th className="px-6 py-4">Thông tin sân</th>
-                  <th className="px-6 py-4">Thời gian đá</th>
+                  <th className="px-6 py-4 cursor-pointer hover:text-emerald-600 transition-colors" onClick={() => requestSort('pitchName')}>
+                    Thông tin sân {sortConfig?.key === 'pitchName' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th className="px-6 py-4 cursor-pointer hover:text-emerald-600 transition-colors" onClick={() => requestSort('playDate')}>
+                    Thời gian đá {sortConfig?.key === 'playDate' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
                   <th className="px-6 py-4">Trạng thái</th>
-                  <th className="px-6 py-4">Giá tiền</th>
+                  <th className="px-6 py-4 cursor-pointer hover:text-emerald-600 transition-colors" onClick={() => requestSort('priceAtBooking')}>
+                    Giá tiền {sortConfig?.key === 'priceAtBooking' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                  </th>
                   <th className="px-6 py-4 text-right"></th>
                 </tr>
               </thead>

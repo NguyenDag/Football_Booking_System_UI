@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+// Simple cn helper for conditional classes
+const cn = (...args: (string | boolean | undefined)[]) => args.filter(Boolean).join(' ');
 import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -10,8 +12,17 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Calendar as CalendarIcon, Check, X, Filter, Search, RotateCcw } from 'lucide-react';
 import { bookingService, type BookingResponse, type BookingDetailResponse } from '../api/booking.service';
+import { pitchService, type Field } from '../api/pitch.service';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '../components/ui/select';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { signalRService } from '../api/signalr.service';
 
 export function BookingsPage() {
   const { user } = useAuth();
@@ -23,18 +34,75 @@ export function BookingsPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [pitchFilter, setPitchFilter] = useState<string>('ALL');
+  const [sortBy, setSortBy] = useState<string>('NEWEST');
+  const [pitches, setPitches] = useState<Field[]>([]);
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+
+  useEffect(() => {
+    signalRService.startConnection();
+
+    const handleNewBooking = (booking: BookingResponse) => {
+      toast.info(`🔔 Booking mới từ khách hàng ${booking.customerName || 'vãng lai'}!`, {
+        description: `Sân: ${booking.details[0]?.pitchName || 'Sân bóng'} - ${booking.totalAmount.toLocaleString()}đ`,
+        duration: 8000
+      });
+      fetchData(); // Full refresh to ensure consistency
+    };
+
+    const handleStatusUpdate = () => {
+      fetchData();
+    };
+
+    signalRService.on('NewBooking', handleNewBooking);
+    signalRService.on('BookingStatusChanged', handleStatusUpdate);
+
+    return () => {
+      signalRService.off('NewBooking', handleNewBooking);
+      signalRService.off('BookingStatusChanged', handleStatusUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [activeTab, searchTerm]);
 
   const activeBookings = React.useMemo(() => {
-    let base = activeTab === 'pending' ? pendingBookings : allBookings;
-    const term = searchTerm.toLowerCase();
+    let base = allBookings;
     
+    if (activeTab === 'pending') {
+      base = pendingBookings;
+    } else if (activeTab === 'urgent') {
+      base = pendingBookings.filter(b => {
+        const detail = b.details[0];
+        if (!detail) return false;
+        const bookingDate = new Date(detail.playDate + 'T' + detail.startTime);
+        const hoursUntil = (bookingDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+        return hoursUntil > 0 && hoursUntil <= 2;
+      });
+    }
+
+    // Filter by Status
+    if (statusFilter !== 'ALL') {
+      base = base.filter(b => b.status === statusFilter);
+    }
+
+    // Filter by Pitch
+    if (pitchFilter !== 'ALL') {
+      base = base.filter(b => b.details.some(d => d.pitchId.toString() === pitchFilter));
+    }
+
+    // Search
+    const term = searchTerm.toLowerCase();
     if (term) {
       base = base.filter(b => 
         b.bookingId.toString().includes(term) ||
@@ -42,8 +110,29 @@ export function BookingsPage() {
         (b.customerPhone && b.customerPhone.includes(term))
       );
     }
-    return base;
-  }, [activeTab, pendingBookings, allBookings, searchTerm]);
+
+    // Sort
+    const sorted = [...base].sort((a, b) => {
+      switch (sortBy) {
+        case 'NEWEST':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case 'OLDEST':
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case 'PRICE_DESC':
+          return b.totalAmount - a.totalAmount;
+        case 'PRICE_ASC':
+          return a.totalAmount - b.totalAmount;
+        case 'PLAY_DATE':
+          const dateA = a.details[0] ? new Date(a.details[0].playDate + 'T' + a.details[0].startTime).getTime() : 0;
+          const dateB = b.details[0] ? new Date(b.details[0].playDate + 'T' + b.details[0].startTime).getTime() : 0;
+          return dateA - dateB;
+        default:
+          return 0;
+      }
+    });
+
+    return sorted;
+  }, [activeTab, pendingBookings, allBookings, searchTerm, statusFilter, pitchFilter, sortBy, now]);
 
   const totalPages = Math.ceil(activeBookings.length / itemsPerPage) || 1;
   const paginatedBookings = activeBookings.slice(
@@ -71,6 +160,19 @@ export function BookingsPage() {
       setLoading(false);
     }
   };
+
+  const fetchPitches = async () => {
+    try {
+      const data = await pitchService.getAllPitches();
+      setPitches(data);
+    } catch (error) {
+      console.error('Failed to fetch pitches:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchPitches();
+  }, []);
 
   const handleConfirm = async () => {
     if (!selectedBookingDetail) return;
@@ -120,17 +222,28 @@ export function BookingsPage() {
     const detail = booking.details[0]; // Assuming for display we show first detail
     const canManage = user?.role === 'ADMIN' || user?.role === 'STAFF';
 
+    const bookingDate = detail ? new Date(detail.playDate + 'T' + detail.startTime) : null;
+    const hoursUntil = bookingDate ? (bookingDate.getTime() - now.getTime()) / (1000 * 60 * 60) : null;
+    const isLate = detail?.status === 'PENDING' && hoursUntil !== null && hoursUntil > 0 && hoursUntil <= 1;
+    const minsUntilAutoCancel = hoursUntil !== null ? Math.floor(hoursUntil * 60 - 30) : 0;
+
     return (
-      <div className="border rounded-lg p-4 space-y-3 bg-white shadow-sm">
+      <div className={cn(
+        "border rounded-lg p-4 space-y-3 transition-all",
+        isLate ? "border-red-400 bg-red-50 ring-2 ring-red-100 shadow-lg shadow-red-100/50 animate-pulse-subtle" : "bg-white shadow-sm border-gray-200"
+      )}>
         <div className="flex items-start justify-between">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <p className="font-medium text-lg">{detail?.pitchName || 'Sân bóng'}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-bold text-lg text-slate-900">{detail?.pitchName || 'Sân bóng'}</p>
               {getStatusBadge(detail?.status || booking.status)}
+              {isLate && (
+                <Badge variant="destructive" className="animate-bounce h-5 px-1.5 py-0 text-[10px] font-black uppercase shadow-sm">Khẩn cấp</Badge>
+              )}
             </div>
             <p className="text-xs text-gray-500 font-mono uppercase">Mã: BK-{booking.bookingId}</p>
           </div>
-          <p className="text-xl font-bold text-green-600">
+          <p className="text-xl font-black text-emerald-600">
             {booking.totalAmount.toLocaleString('vi-VN')}đ
           </p>
         </div>
@@ -165,9 +278,28 @@ export function BookingsPage() {
         )}
 
         {detail?.cancellationReason && (
-          <div className="text-sm bg-red-50 p-2 rounded">
-            <p className="text-xs text-red-500 font-semibold">Lý do hủy:</p>
-            <p className="text-red-700 italic">{detail.cancellationReason}</p>
+          <div className="text-sm bg-red-50 p-3 rounded-lg border border-red-100">
+            <p className="text-[10px] uppercase text-red-500 font-bold mb-1">Lý do hủy:</p>
+            <p className="text-red-700 italic text-xs">{detail.cancellationReason}</p>
+          </div>
+        )}
+
+        {isLate && (
+          <div className="p-3 bg-red-600 rounded-xl shadow-lg shadow-red-200 flex items-center justify-between">
+            <p className="text-white text-xs font-bold flex items-center gap-2">
+              <X className="w-4 h-4" />
+              SẮP QUÁ HẠN: Cần xử lý ngay!
+            </p>
+            {minsUntilAutoCancel > 0 && (
+              <div className="bg-white/20 px-2 py-1 rounded text-[10px] text-white font-black uppercase">
+                Hủy sau: {minsUntilAutoCancel}'
+              </div>
+            )}
+            {minsUntilAutoCancel <= 0 && (
+              <div className="bg-white/20 px-2 py-1 rounded text-[10px] text-white font-black uppercase">
+                Sắp bị hủy!
+              </div>
+            )}
           </div>
         )}
 
@@ -210,75 +342,158 @@ export function BookingsPage() {
         <p className="text-gray-600 mt-1">Xem và xử lý các đặt lịch sân</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="shadow-md border-emerald-100">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <CalendarIcon className="w-5 h-5 text-emerald-600" />
-              Chọn ngày xem lịch
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="shadow-sm border-emerald-100">
+          <CardHeader className="p-3 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-slate-500 flex items-center gap-2">
+              <CalendarIcon className="w-3 h-3" /> Ngày đá
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-3">
+          <CardContent className="p-3 pt-0">
+            <div className="flex items-center gap-2">
               <Input
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="flex-1"
+                className="h-9 text-xs"
               />
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => setSelectedDate('')}
-                title="Xem tất cả"
-              >
-                <X className="w-4 h-4" />
-              </Button>
+              {selectedDate && (
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSelectedDate('')}>
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Search className="w-5 h-5 text-blue-600" />
-              Tìm kiếm nhanh
+        <Card className="shadow-sm">
+          <CardHeader className="p-3 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-slate-500 flex items-center gap-2">
+              <Search className="w-3 h-3" /> Tìm kiếm
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 pt-0">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
               <Input
-                placeholder="Tìm theo ID hoặc khách hàng..."
+                placeholder="ID, tên, SĐT..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
+                className="pl-8 h-9 text-xs"
               />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm lg:col-span-2">
+          <CardHeader className="p-3 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-slate-500 flex items-center gap-2">
+              <Filter className="w-3 h-3" /> Bộ lọc & Sắp xếp
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0">
+            <div className="grid grid-cols-3 gap-2">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Trạng thái" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
+                  <SelectItem value="PENDING">Chờ xác nhận</SelectItem>
+                  <SelectItem value="CONFIRMED">Đã xác nhận</SelectItem>
+                  <SelectItem value="COMPLETED">Hoàn thành</SelectItem>
+                  <SelectItem value="CANCELLED">Đã hủy</SelectItem>
+                  <SelectItem value="REJECTED">Từ chối</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={pitchFilter} onValueChange={setPitchFilter}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Sân bóng" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Tất cả sân</SelectItem>
+                  {pitches.map(p => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Sắp xếp" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NEWEST">Mới nhất</SelectItem>
+                  <SelectItem value="OLDEST">Cũ nhất</SelectItem>
+                  <SelectItem value="PLAY_DATE">Ngày đá gần nhất</SelectItem>
+                  <SelectItem value="PRICE_DESC">Giá cao nhất</SelectItem>
+                  <SelectItem value="PRICE_ASC">Giá thấp nhất</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Bookings Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 max-w-sm mx-auto mb-6">
-          <TabsTrigger value="all" className="relative">
-            Tất cả lịch
-            {allBookings.length > 0 && (
-              <Badge variant="outline" className="ml-2 px-1.5 py-0 min-w-5 justify-center">
-                {allBookings.length}
-              </Badge>
+        <TabsList className="grid w-full grid-cols-3 max-w-md mx-auto mb-8 bg-slate-100/50 p-1 rounded-xl">
+          <TabsTrigger value="all" className="relative h-10 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            Tất cả
+            {activeTab !== 'all' && allBookings.length > 0 && (
+              <span className="ml-1.5 text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full font-medium">{allBookings.length}</span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="pending" className="relative">
+          <TabsTrigger value="pending" className="relative h-10 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
             Chờ xử lý
             {pendingBookings.length > 0 && (
-              <Badge variant="destructive" className="ml-2 px-1.5 py-0 min-w-5 justify-center">
-                {pendingBookings.length}
-              </Badge>
+              <span className="ml-1.5 text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-bold">{pendingBookings.length}</span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="urgent" className="relative h-10 rounded-lg text-red-500 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-red-600">
+            Ưu tiên 🔥
+            {pendingBookings.filter(b => {
+              const d = b.details[0];
+              if (!d) return false;
+              const date = new Date(d.playDate + 'T' + d.startTime);
+              const hrs = (date.getTime() - now.getTime()) / (1000 * 60 * 60);
+              return hrs > 0 && hrs <= 2;
+            }).length > 0 && (
+              <span className="ml-1.5 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full animate-pulse">
+                {pendingBookings.filter(b => {
+                  const d = b.details[0];
+                  if (!d) return false;
+                  const date = new Date(d.playDate + 'T' + d.startTime);
+                  const hrs = (date.getTime() - now.getTime()) / (1000 * 60 * 60);
+                  return hrs > 0 && hrs <= 2;
+                }).length}
+              </span>
             )}
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="urgent" className="space-y-4 mt-2">
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'urgent' && paginatedBookings.map(booking => (
+                <BookingCard key={booking.bookingId} booking={booking} />
+              ))}
+              {activeTab === 'urgent' && activeBookings.length === 0 && (
+                <div className="text-center py-24 border-2 border-dashed rounded-2xl bg-slate-50 border-slate-200">
+                  <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Check className="w-8 h-8 text-emerald-600" />
+                  </div>
+                  <p className="text-slate-900 font-bold text-lg">Hệ thống đang an toàn!</p>
+                  <p className="text-slate-500 text-sm mt-1">Không có booking nào sắp hết hạn xác nhận.</p>
+                </div>
+              )}
+            </>
+          )}
+        </TabsContent>
 
 
 

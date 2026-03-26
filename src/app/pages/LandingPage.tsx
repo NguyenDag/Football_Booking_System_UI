@@ -11,6 +11,14 @@ import { format } from 'date-fns';
 import { Calendar as CalendarIcon, MapPin, Users, Info, ArrowRight, ShieldCheck, Zap, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '../components/ui/badge';
+import { 
+  Pagination, 
+  PaginationContent, 
+  PaginationItem, 
+  PaginationLink, 
+  PaginationNext, 
+  PaginationPrevious 
+} from '../components/ui/pagination';
 
 export function LandingPage() {
   const { isAuthenticated } = useAuth();
@@ -19,6 +27,8 @@ export function LandingPage() {
   const [selectedPitch, setSelectedPitch] = useState<Field | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   useEffect(() => {
     fetchPitches();
@@ -45,6 +55,18 @@ export function LandingPage() {
     } else {
       toast.info('Vui lòng đăng nhập để thực hiện đặt sân');
       navigate('/login');
+    }
+  };
+
+  // Pagination logic
+  const totalPages = Math.ceil(pitches.length / itemsPerPage);
+  const currentPitches = pitches.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    const listElement = document.getElementById('pitch-list-container');
+    if (listElement) {
+      listElement.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
@@ -117,8 +139,8 @@ export function LandingPage() {
               <MapPin className="text-emerald-500" /> Danh sách sân
             </h2>
           </div>
-          <div className="grid gap-4">
-            {pitches.map(pitch => (
+          <div id="pitch-list-container" className="grid gap-4">
+            {currentPitches.map(pitch => (
               <div 
                 key={pitch.id}
                 onClick={() => setSelectedPitch(pitch)}
@@ -128,8 +150,16 @@ export function LandingPage() {
                     : 'border-slate-100 bg-white hover:border-emerald-200 hover:shadow-sm'
                 }`}
               >
-                <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100 italic flex items-center justify-center text-xs text-slate-400">
-                   {pitch.type} người
+                <div className="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100 relative group/img">
+                  <img 
+                    src={pitch.image} 
+                    alt={pitch.name}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=200&auto=format&fit=crop';
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors duration-300" />
                 </div>
                 <div className="flex-1">
                   <h3 className="font-bold text-slate-900">{pitch.name}</h3>
@@ -146,6 +176,49 @@ export function LandingPage() {
               </div>
             ))}
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="mt-8 flex justify-center">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer hover:bg-emerald-50 text-emerald-600 transition-colors'}
+                    >
+                      Trang trước
+                    </PaginationPrevious>
+                  </PaginationItem>
+                  
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <PaginationItem key={page}>
+                      <PaginationLink
+                        onClick={() => handlePageChange(page)}
+                        isActive={currentPage === page}
+                        className={
+                          currentPage === page 
+                            ? 'bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600' 
+                            : 'cursor-pointer hover:bg-emerald-50 text-slate-600 transition-colors'
+                        }
+                      >
+                        {page}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+
+                  <PaginationItem>
+                    <PaginationNext 
+                      onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer hover:bg-emerald-50 text-emerald-600 transition-colors'}
+                    >
+                      Trang sau
+                    </PaginationNext>
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </div>
 
         {/* Availability Calendar & Prices */}
