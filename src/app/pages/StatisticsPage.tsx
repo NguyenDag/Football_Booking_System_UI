@@ -30,15 +30,12 @@ export function StatisticsPage() {
 
   const statusData = React.useMemo(() => {
     if (!stats) return [];
-    // Note: statusCounts was in mock, but AdminAdvancedStatsResponse has totalBookings and cancellationRate
-    // For a better UI, we can calculate some generic distribution or wait for better BE stats.
-    // However, for now, let's use what we have or adapt.
-    // The previous mock had: PENDING, CONFIRMED, COMPLETED, CANCELLED, REJECTED.
-    // Let's stick to simple ones for now.
     return [
-      { name: 'Hoàn thành', value: stats.totalBookings - Math.round(stats.totalBookings * stats.cancellationRate / 100), color: '#3b82f6' },
-      { name: 'Đã hủy/từ chối', value: Math.round(stats.totalBookings * stats.cancellationRate / 100), color: '#ef4444' },
-    ];
+      { name: 'Hoàn thành', value: stats.completedCount, color: '#10b981' },
+      { name: 'Chờ xác nhận', value: stats.pendingCount, color: '#f59e0b' },
+      { name: 'Đã xác nhận', value: stats.confirmedCount, color: '#3b82f6' },
+      { name: 'Đã hủy/từ chối', value: stats.cancelledCount, color: '#ef4444' },
+    ].filter(item => item.value > 0);
   }, [stats]);
 
   if (loading || !stats) {

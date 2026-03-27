@@ -6,13 +6,14 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { Calendar, Clock, XCircle, Search, Zap, QrCode, AlertCircle, RefreshCw } from 'lucide-react';
+import { Calendar, Clock, XCircle, Search, Zap, QrCode, AlertCircle, RefreshCw, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { pitchService, Field as ApiField } from '../api/pitch.service';
 import { bookingService, type BookingResponse, type BookingDetailResponse } from '../api/booking.service';
 import { paymentService } from '../api/payment.service';
+import { walletService } from '../api/wallet.service';
 
 interface FlatBooking extends BookingDetailResponse {
   bookingId: number;
@@ -26,12 +27,20 @@ interface FlatBooking extends BookingDetailResponse {
 
 const ITEMS_PER_PAGE = 6;
 
+const parseUTCDate = (dateStr: string) => {
+  if (!dateStr) return new Date();
+  if (!dateStr.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(dateStr)) {
+    return new Date(dateStr + 'Z');
+  }
+  return new Date(dateStr);
+};
+
 export function MyBookingsPage() {
   const { user } = useAuth();
   const [now, setNow] = React.useState(new Date());
 
   React.useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60000);
+    const timer = setInterval(() => setNow(new Date()), 1000); // Update every second for countdown
     return () => clearInterval(timer);
   }, []);
   const navigate = useNavigate();
@@ -48,6 +57,9 @@ export function MyBookingsPage() {
   const [paymentDialog, setPaymentDialog] = useState<FlatBooking | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState<{ accountNumber: string; bankName: string; accountName: string } | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'WALLET' | 'BANK'>('BANK');
+  const [isPayingWallet, setIsPayingWallet] = useState(false);
 
   React.useEffect(() => {
     fetchData();
@@ -62,6 +74,41 @@ export function MyBookingsPage() {
       console.error('Failed to fetch payment info:', error);
     }
   };
+
+  const fetchWalletBalance = async () => {
+    try {
+      const data = await walletService.getMyWallet();
+      setWalletBalance(data.balance);
+      if (paymentDialog && data.balance >= paymentDialog.totalPrice) {
+        setPaymentMethod('WALLET');
+      }
+    } catch (error) {
+      console.error('Failed to fetch wallet balance:', error);
+    }
+  };
+
+  const handleWalletPayment = async () => {
+    if (!paymentDialog) return;
+    try {
+      setIsPayingWallet(true);
+      await walletService.payBooking(paymentDialog.bookingId);
+      toast.success('Thanh toán bằng ví thành công!');
+      setPaymentDialog(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message || 'Thanh toán thất bại');
+    } finally {
+      setIsPayingWallet(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (paymentDialog) {
+      fetchWalletBalance();
+      // Default to WALLET if enough balance, else BANK
+      setPaymentMethod('BANK'); 
+    }
+  }, [paymentDialog]);
 
   const fetchData = async () => {
     try {
@@ -219,6 +266,19 @@ export function MyBookingsPage() {
     const canCancel = (booking.status === 'PENDING' || booking.status === 'CONFIRMED') && !booking.cancellationReason;
     const hoursUntil = (bookingDate.getTime() - now.getTime()) / (1000 * 60 * 60);
     
+    // Payment Timeout Logic (10 minutes)
+    const createdAtDate = parseUTCDate(booking.createdAt);
+    const tenMinTimeout = 10 * 60 * 1000;
+    const timeSinceCreated = now.getTime() - createdAtDate.getTime();
+    const isPaymentExpiring = 
+      booking.paymentStatus?.toUpperCase() !== 'PAID' && 
+      booking.paymentStatus?.toUpperCase() !== 'REFUNDED' &&
+      booking.status?.toUpperCase() === 'PENDING' && 
+      timeSinceCreated < tenMinTimeout &&
+      !booking.cancellationReason;
+    const minsRemaining = Math.max(0, Math.floor((tenMinTimeout - timeSinceCreated) / 60000));
+    const secsRemaining = Math.max(0, Math.floor(((tenMinTimeout - timeSinceCreated) % 60000) / 1000));
+
     // Time Alerts
     const isImminent = hoursUntil > 0 && hoursUntil < 2 && booking.status === 'CONFIRMED'; 
     const isLateConfirmation = hoursUntil > 0 && hoursUntil <= 1 && booking.status === 'PENDING';
@@ -294,7 +354,19 @@ export function MyBookingsPage() {
               </div>
             )}
 
-            {isLateConfirmation && (
+            {isPaymentExpiring && (
+              <div className="p-3 bg-orange-500 rounded-xl shadow-lg shadow-orange-100 flex items-center justify-between animate-pulse">
+                <p className="text-white text-[11px] font-bold flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  HẾT HẠN THANH TOÁN SAU:
+                </p>
+                <div className="bg-white/20 px-2 py-1 rounded text-sm text-white font-black font-mono">
+                  {minsRemaining.toString().padStart(2, '0')}:{secsRemaining.toString().padStart(2, '0')}
+                </div>
+              </div>
+            )}
+
+            {isLateConfirmation && !isPaymentExpiring && (
               <div className="text-sm p-4 bg-red-50/80 rounded-xl border border-red-200 shadow-sm">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
@@ -315,7 +387,7 @@ export function MyBookingsPage() {
 
             <div className="flex items-center justify-between pt-2">
               <div className="text-[10px] text-gray-400 uppercase font-medium">
-                Đặt lúc: {format(new Date(booking.createdAt), 'HH:mm dd/MM/yyyy')}
+                Đặt lúc: {format(parseUTCDate(booking.createdAt), 'HH:mm dd/MM/yyyy')}
               </div>
               <div className="flex items-center gap-2">
                 {booking.paymentStatus === 'UNPAID' && (booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
@@ -642,102 +714,155 @@ export function MyBookingsPage() {
       <Dialog open={!!paymentDialog} onOpenChange={() => setPaymentDialog(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-center text-xl">Thanh toán chuyển khoản</DialogTitle>
+            <DialogTitle className="text-center text-xl">Thanh toán đơn hàng</DialogTitle>
             <DialogDescription className="text-center">
-              Vui lòng quét mã QR hoặc chuyển khoản đúng thông tin bên dưới
+              Chọn phương thức thanh toán phù hợp với bạn
             </DialogDescription>
           </DialogHeader>
           
           {paymentDialog && (
-            <div className="space-y-6">
-              <div className="flex justify-center bg-white p-4 rounded-xl shadow-inner border">
-                {(() => {
-                  const bankMap: Record<string, string> = {
-                    'TPBank': 'TPB',
-                    'Vietinbank': 'ICB',
-                    'VietinBank': 'ICB'
-                  };
-                  const provider = bankMap[paymentInfo?.bankName || ''] || 'ICB';
-                  return (
-                    <img 
-                      src={`https://img.vietqr.io/image/${provider}-${paymentInfo?.accountNumber || '107600118119'}-compact2.png?amount=${paymentDialog.totalPrice}&addInfo=DH${paymentDialog.bookingId}&accountName=${encodeURIComponent(paymentInfo?.accountName || 'Football Booking')}`}
-                      alt="VietQR"
-                      className="w-64 h-64 object-contain"
-                    />
-                  );
-                })()}
-              </div>
+            <div className="space-y-4">
+              <Tabs value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as any)} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                  <TabsTrigger value="WALLET" className="font-bold gap-2">
+                    <Wallet className="w-4 h-4" />
+                    Ví của tôi
+                  </TabsTrigger>
+                  <TabsTrigger value="BANK" className="font-bold gap-2">
+                    <QrCode className="w-4 h-4" />
+                    Chuyển khoản
+                  </TabsTrigger>
+                </TabsList>
 
-              <div className="space-y-3 bg-gray-50 p-4 rounded-lg text-sm">
-                <div className="flex justify-between border-b border-gray-100 pb-2">
-                  <span className="text-gray-500">Ngân hàng:</span>
-                  <span className="font-bold">{paymentInfo?.bankName || 'Vietinbank'}</span>
-                </div>
-                <div className="flex justify-between border-b border-gray-100 pb-2">
-                  <span className="text-gray-500">Số tài khoản:</span>
-                  <span className="font-bold">{paymentInfo?.accountNumber || '107600118119'}</span>
-                </div>
-                <div className="flex justify-between border-b border-gray-100 pb-2">
-                  <span className="text-gray-500">Chủ tài khoản:</span>
-                  <span className="font-bold uppercase">{paymentInfo?.accountName || 'FOOTBALL BOOKING'}</span>
-                </div>
-                <div className="flex justify-between border-b border-gray-100 pb-2">
-                  <span className="text-gray-500">Số tiền:</span>
-                  <span className="font-bold text-green-600">{paymentDialog.totalPrice.toLocaleString('vi-VN')}đ</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Nội dung chuyển khoản:</span>
-                  <span className="font-bold text-blue-600 px-2 py-0.5 bg-blue-50 rounded">DH{paymentDialog.bookingId}</span>
-                </div>
-              </div>
+                <TabsContent value="WALLET" className="space-y-4 outline-none">
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 text-center space-y-3">
+                    <p className="text-sm text-slate-500 font-medium">Số dư ví hiện tại</p>
+                    <div className="flex items-baseline justify-center gap-1">
+                      <span className="text-3xl font-black text-slate-900">
+                        {walletBalance !== null ? walletBalance.toLocaleString('vi-VN') : '...'}
+                      </span>
+                      <span className="text-sm font-bold text-slate-500">VNĐ</span>
+                    </div>
+                    <div className="pt-2">
+                      <div className="flex justify-between text-sm py-2 border-t border-slate-200/50">
+                        <span className="text-slate-500">Số tiền cần thanh toán:</span>
+                        <span className="font-bold text-red-600">{paymentDialog.totalPrice.toLocaleString('vi-VN')}đ</span>
+                      </div>
+                    </div>
+                  </div>
 
-              <div className="bg-blue-50 p-3 rounded-lg flex gap-3 items-start border border-blue-100">
-                <AlertCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-700 leading-relaxed">
-                  Hệ thống sẽ tự động xác nhận sau khi nhận được tiền (thường mất 1-2 phút). Vui lòng giữ đúng nội dung chuyển khoản là <strong className="text-red-500">DH{paymentDialog.bookingId}</strong>.
-                </p>
-              </div>
-
-              <div className="space-y-3 pt-2">
-                <Button 
-                  className="w-full bg-blue-600 hover:bg-blue-700 font-bold h-11"
-                  onClick={async () => {
-                    try {
-                      setIsSyncing(true);
-                      const result = await paymentService.syncSePay();
-                      if (result.updatedCount > 0) {
-                        toast.success(`Đã xác nhận ${result.updatedCount} thanh toán mới!`);
-                        await fetchData();
-                        setPaymentDialog(null);
-                      } else {
-                        toast.info("Chưa tìm thấy giao dịch mới. Vui lòng đợi 1-2 phút.");
-                        await fetchData();
-                      }
-                    } catch (error) {
-                      toast.error("Lỗi khi kết nối với máy chủ.");
-                    } finally {
-                      setIsSyncing(false);
-                    }
-                  }}
-                  disabled={isSyncing}
-                >
-                  {isSyncing ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                      Đang làm mới...
-                    </>
+                  {walletBalance !== null && walletBalance >= paymentDialog.totalPrice ? (
+                    <div className="space-y-3">
+                      <Button 
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 font-bold h-12 shadow-lg shadow-emerald-200 gap-2"
+                        onClick={handleWalletPayment}
+                        disabled={isPayingWallet}
+                      >
+                        {isPayingWallet ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                        Xác nhận thanh toán ngay
+                      </Button>
+                      <p className="text-[10px] text-center text-slate-400">
+                        * Tiền sẽ được trừ trực tiếp từ số dư ví của bạn.
+                      </p>
+                    </div>
                   ) : (
-                    'Kiểm tra lại trạng thái'
+                    <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 flex gap-3 items-start">
+                      <AlertCircle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-orange-700 uppercase">Số dư không đủ</p>
+                        <p className="text-xs text-orange-600 leading-relaxed">
+                          Vui lòng chọn phương thức <strong>"Chuyển khoản"</strong> để nạp thêm tiền và tự động thanh toán đơn hàng này.
+                        </p>
+                      </div>
+                    </div>
                   )}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="w-full h-11" 
-                  onClick={() => setPaymentDialog(null)}
-                >
-                  Quay lại
-                </Button>
-              </div>
+                </TabsContent>
+
+                <TabsContent value="BANK" className="space-y-4 outline-none">
+                  <div className="flex justify-center bg-white p-4 rounded-xl shadow-inner border">
+                    {(() => {
+                      const bankMap: Record<string, string> = {
+                        'TPBank': 'TPB',
+                        'Vietinbank': 'ICB',
+                        'VietinBank': 'ICB'
+                      };
+                      const provider = bankMap[paymentInfo?.bankName || ''] || 'ICB';
+                      return (
+                        <img 
+                          src={`https://img.vietqr.io/image/${provider}-${paymentInfo?.accountNumber || '107600118119'}-compact2.png?amount=${paymentDialog.totalPrice}&addInfo=DH${paymentDialog.bookingId}&accountName=${encodeURIComponent(paymentInfo?.accountName || 'Football Booking')}`}
+                          alt="VietQR"
+                          className="w-64 h-64 object-contain shadow-sm"
+                        />
+                      );
+                    })()}
+                  </div>
+
+                  <div className="space-y-2 bg-slate-50 p-4 rounded-xl text-[13px] border border-slate-100">
+                    <div className="flex justify-between pb-1.5 border-b border-slate-200/50">
+                      <span className="text-slate-500 italic">Số tiền:</span>
+                      <span className="font-black text-emerald-600 underline text-sm">{paymentDialog.totalPrice.toLocaleString('vi-VN')}đ</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 italic">Nội dung:</span>
+                      <span className="font-black text-blue-600 px-2 py-0.5 bg-blue-50 rounded uppercase">DH{paymentDialog.bookingId}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 p-3 rounded-lg flex gap-3 items-start border border-blue-100">
+                    <AlertCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-blue-700 leading-relaxed">
+                      Quét mã để nạp tiền vào ví và thanh toán đơn hàng. Hệ thống tự động xác nhận sau 1-2 phút.
+                    </p>
+                  </div>
+
+                  <Button 
+                    className="w-full bg-blue-600 hover:bg-blue-700 font-bold h-11"
+                    onClick={async () => {
+                      try {
+                        setIsSyncing(true);
+                        const result = await paymentService.syncSePay();
+                        const isPaid = result.paidBookingIds.includes(paymentDialog.bookingId);
+                        const isPartial = result.partiallyPaidBookingIds.includes(paymentDialog.bookingId);
+
+                        if (isPaid) {
+                          toast.success("Thanh toán thành công! Đơn hàng đã được xác nhận.");
+                          await fetchData();
+                          setPaymentDialog(null);
+                        } else if (isPartial) {
+                          toast.warning("Đã ghi nhận giao dịch! Tiền đã vào ví nhưng chưa đủ để thanh toán đơn hàng. Vui lòng nạp thêm.");
+                          await fetchData();
+                          fetchWalletBalance();
+                        } else {
+                          toast.info("Chưa tìm thấy giao dịch mới. Vui lòng đợi 1-2 phút.");
+                          await fetchData();
+                        }
+                      } catch (error) {
+                        toast.error("Lỗi khi kết nối với máy chủ.");
+                      } finally {
+                        setIsSyncing(false);
+                      }
+                    }}
+                    disabled={isSyncing}
+                  >
+                    {isSyncing ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                        Đang kiểm tra...
+                      </>
+                    ) : (
+                      'Đã chuyển khoản, kiểm tra ngay'
+                    )}
+                  </Button>
+                </TabsContent>
+              </Tabs>
+
+              <Button 
+                variant="ghost" 
+                className="w-full h-10 text-slate-500 hover:bg-slate-50 rounded-xl" 
+                onClick={() => setPaymentDialog(null)}
+              >
+                Đóng lại
+              </Button>
             </div>
           )}
         </DialogContent>

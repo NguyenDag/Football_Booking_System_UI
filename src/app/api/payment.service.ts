@@ -6,12 +6,18 @@ export interface PaymentInfo {
     accountName: string;
 }
 
+export interface SyncResult {
+    totalProcessed: number;
+    paidBookingIds: number[];
+    partiallyPaidBookingIds: number[];
+}
+
 export const paymentService = {
-    getPaymentInfo: async () => {
+    getPaymentInfo: async (): Promise<PaymentInfo> => {
         const response = await apiClient('/payments/info');
         return response.data;
     },
-    syncSePay: async () => {
+    syncSePay: async (): Promise<SyncResult> => {
         const response = await apiClient('/payments/sync-sepay');
         return response.data;
     }

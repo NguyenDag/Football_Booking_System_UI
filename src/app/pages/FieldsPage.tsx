@@ -91,7 +91,7 @@ export function FieldsPage() {
   const handleStatusChange = async (fieldId: string, newStatus: string) => {
     try {
       await pitchService.updatePitch(fieldId, { status: newStatus });
-      setFields(fields.map(f => 
+      setFields(fields.map(f =>
         f.id === fieldId ? { ...f, status: newStatus } : f
       ) as ApiField[]);
       toast.success('Đã cập nhật trạng thái sân');
@@ -109,11 +109,11 @@ export function FieldsPage() {
 
   const handleOpenEditDialog = (field: ApiField) => {
     setEditingField(field);
-    setFormData({ 
-      name: field.name, 
-      type: field.type, 
-      description: field.description, 
-      status: field.status 
+    setFormData({
+      name: field.name,
+      type: field.type,
+      description: field.description,
+      status: field.status
     });
     setImageFile(null);
     setIsDialogOpen(true);
@@ -131,7 +131,9 @@ export function FieldsPage() {
         const formDataUpload = new FormData();
         formDataUpload.append('file', imageFile);
         const token = localStorage.getItem('accessToken');
-        const res = await fetch('https://localhost:7290/api/upload/image', {
+        //const res = await fetch('https://localhost:7290/api/upload/image', {
+        const res = await fetch('http://localhost:5252/api/upload/image', {
+
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -153,14 +155,14 @@ export function FieldsPage() {
         '7': '7_PERSON',
         '11': '11_PERSON'
       };
-      
+
       const payload: any = {
         pitchName: formData.name,
         pitchType: pitchTypeMap[formData.type as keyof typeof pitchTypeMap],
         status: formData.status,
         description: formData.description
       };
-      
+
       if (uploadedImageUrl) {
         payload.imageUrl = uploadedImageUrl;
       }
@@ -201,11 +203,11 @@ export function FieldsPage() {
 
   const handleAddPriceSlot = async () => {
     if (!selectedPitchForPrice) return;
-    
+
     // Frontend validation for overlap
     const start = newPriceSlot.startTime + ':00';
     const end = newPriceSlot.endTime + ':00';
-    
+
     const hasConflict = priceSlots.some(s => {
       const sameDay = (s.applyOn === 'ALL' || newPriceSlot.applyOn === 'ALL') || (s.applyOn === newPriceSlot.applyOn);
       const overlapTime = start < s.endTime && end > s.startTime;
@@ -318,7 +320,7 @@ export function FieldsPage() {
               </SelectContent>
             </Select>
           </div>
-          
+
           <Button variant="ghost" size="icon" onClick={fetchFields} className="h-11 w-11 rounded-xl text-slate-400 hover:text-emerald-600">
             <RefreshCcw className="w-5 h-5" />
           </Button>
@@ -336,18 +338,18 @@ export function FieldsPage() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label className="font-bold">Tên sân</Label>
-              <Input 
-                placeholder="VD: Sân E" 
+              <Input
+                placeholder="VD: Sân E"
                 value={formData.name}
-                onChange={e => setFormData({...formData, name: e.target.value})}
+                onChange={e => setFormData({ ...formData, name: e.target.value })}
                 className="rounded-xl"
               />
             </div>
             <div className="space-y-2">
               <Label className="font-bold">Loại sân</Label>
-              <Select 
+              <Select
                 value={formData.type}
-                onValueChange={(val: any) => setFormData({...formData, type: val})}
+                onValueChange={(val: any) => setFormData({ ...formData, type: val })}
               >
                 <SelectTrigger className="rounded-xl">
                   <SelectValue placeholder="Chọn loại sân" />
@@ -361,10 +363,10 @@ export function FieldsPage() {
             </div>
             <div className="space-y-2">
               <Label className="font-bold">Mô tả</Label>
-              <Input 
-                placeholder="Mô tả về sân" 
+              <Input
+                placeholder="Mô tả về sân"
                 value={formData.description}
-                onChange={e => setFormData({...formData, description: e.target.value})}
+                onChange={e => setFormData({ ...formData, description: e.target.value })}
                 className="rounded-xl"
               />
             </div>
@@ -375,11 +377,11 @@ export function FieldsPage() {
                   <ImageIcon className="w-4 h-4 text-emerald-600" />
                   <span className="truncate">{imageFile ? imageFile.name : 'Chọn ảnh tải lên...'}</span>
                 </Button>
-                <input 
-                  id="fieldImageInput" 
-                  type="file" 
-                  accept="image/jpeg,image/png,image/webp,image/gif" 
-                  className="hidden" 
+                <input
+                  id="fieldImageInput"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
                   onChange={(e) => {
                     if (e.target.files && e.target.files.length > 0) {
                       setImageFile(e.target.files[0]);
@@ -389,11 +391,11 @@ export function FieldsPage() {
               </div>
             </div>
             {editingField && (
-               <div className="space-y-2">
+              <div className="space-y-2">
                 <Label className="font-bold">Trạng thái</Label>
-                <Select 
+                <Select
                   value={formData.status}
-                  onValueChange={(val: any) => setFormData({...formData, status: val})}
+                  onValueChange={(val: any) => setFormData({ ...formData, status: val })}
                 >
                   <SelectTrigger className="rounded-xl">
                     <SelectValue />
@@ -406,8 +408,8 @@ export function FieldsPage() {
                 </Select>
               </div>
             )}
-            <Button 
-              className="w-full bg-emerald-600 hover:bg-emerald-700 h-11 rounded-xl font-bold mt-2" 
+            <Button
+              className="w-full bg-emerald-600 hover:bg-emerald-700 h-11 rounded-xl font-bold mt-2"
               onClick={handleSubmit}
               disabled={submitting}
             >
@@ -430,74 +432,74 @@ export function FieldsPage() {
               </DialogDescription>
             </DialogHeader>
           </div>
-          
+
           <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
             {/* Form thêm mới */}
-              <div className="flex flex-col gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                <h4 className="font-bold flex items-center gap-2 text-slate-800">
-                  <Plus className="w-4 h-4 text-emerald-600" />
-                  Thêm khung giờ mới
-                </h4>
-                <div className="space-y-4">
-                  {/* Hàng 1: Thời gian */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold uppercase text-slate-500">Từ</Label>
-                      <Input 
-                        type="time" 
-                        value={newPriceSlot.startTime}
-                        onChange={e => setNewPriceSlot({...newPriceSlot, startTime: e.target.value})}
-                        className="rounded-xl h-10 w-full px-3"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold uppercase text-slate-500">Đến</Label>
-                      <Input 
-                        type="time" 
-                        value={newPriceSlot.endTime}
-                        onChange={e => setNewPriceSlot({...newPriceSlot, endTime: e.target.value})}
-                        className="rounded-xl h-10 w-full px-3"
-                      />
-                    </div>
+            <div className="flex flex-col gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+              <h4 className="font-bold flex items-center gap-2 text-slate-800">
+                <Plus className="w-4 h-4 text-emerald-600" />
+                Thêm khung giờ mới
+              </h4>
+              <div className="space-y-4">
+                {/* Hàng 1: Thời gian */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-500">Từ</Label>
+                    <Input
+                      type="time"
+                      value={newPriceSlot.startTime}
+                      onChange={e => setNewPriceSlot({ ...newPriceSlot, startTime: e.target.value })}
+                      className="rounded-xl h-10 w-full px-3"
+                    />
                   </div>
-
-                  {/* Hàng 2: Giá và Áp dụng */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold uppercase text-slate-500">Giá (VNĐ/h)</Label>
-                      <Input 
-                        type="number" 
-                        step="10000"
-                        value={newPriceSlot.pricePerHour}
-                        onChange={e => setNewPriceSlot({...newPriceSlot, pricePerHour: parseInt(e.target.value)})}
-                        className="rounded-xl h-10 w-full"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                       <Label className="text-xs font-bold uppercase text-slate-500">Áp dụng</Label>
-                       <Select 
-                        value={newPriceSlot.applyOn}
-                        onValueChange={(val: any) => setNewPriceSlot({...newPriceSlot, applyOn: val})}
-                       >
-                         <SelectTrigger className="rounded-xl h-10 w-full">
-                            <SelectValue />
-                         </SelectTrigger>
-                         <SelectContent className="rounded-xl">
-                            <SelectItem value="ALL">Cả tuần</SelectItem>
-                            <SelectItem value="WEEKDAY">Ngày thường</SelectItem>
-                            <SelectItem value="WEEKEND">Cuối tuần</SelectItem>
-                         </SelectContent>
-                       </Select>
-                    </div>
-                    <Button 
-                      onClick={handleAddPriceSlot}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 h-10 rounded-xl font-bold transition-all sm:col-span-2 lg:col-span-1"
-                    >
-                      Thêm giá
-                    </Button>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-500">Đến</Label>
+                    <Input
+                      type="time"
+                      value={newPriceSlot.endTime}
+                      onChange={e => setNewPriceSlot({ ...newPriceSlot, endTime: e.target.value })}
+                      className="rounded-xl h-10 w-full px-3"
+                    />
                   </div>
                 </div>
+
+                {/* Hàng 2: Giá và Áp dụng */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-500">Giá (VNĐ/h)</Label>
+                    <Input
+                      type="number"
+                      step="10000"
+                      value={newPriceSlot.pricePerHour}
+                      onChange={e => setNewPriceSlot({ ...newPriceSlot, pricePerHour: parseInt(e.target.value) })}
+                      className="rounded-xl h-10 w-full"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold uppercase text-slate-500">Áp dụng</Label>
+                    <Select
+                      value={newPriceSlot.applyOn}
+                      onValueChange={(val: any) => setNewPriceSlot({ ...newPriceSlot, applyOn: val })}
+                    >
+                      <SelectTrigger className="rounded-xl h-10 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="ALL">Cả tuần</SelectItem>
+                        <SelectItem value="WEEKDAY">Ngày thường</SelectItem>
+                        <SelectItem value="WEEKEND">Cuối tuần</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    onClick={handleAddPriceSlot}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 h-10 rounded-xl font-bold transition-all sm:col-span-2 lg:col-span-1"
+                  >
+                    Thêm giá
+                  </Button>
+                </div>
               </div>
+            </div>
 
             {/* Danh sách hiện tại */}
             <div className="space-y-3">
@@ -505,7 +507,7 @@ export function FieldsPage() {
                 Khung giá hiện tại
                 <Badge variant="outline" className="text-xs font-normal text-slate-500">{priceSlots.length} khung</Badge>
               </h4>
-              
+
               {loadingPrices ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
@@ -539,14 +541,14 @@ export function FieldsPage() {
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-4">
                         <p className="text-lg font-black text-emerald-600">
                           {slot.pricePerHour.toLocaleString('vi-VN')}đ
                         </p>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleDeletePriceSlot(slot.priceSlotId)}
                           className="text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all rounded-full"
                         >
@@ -575,108 +577,108 @@ export function FieldsPage() {
         </div>
       ) : (
         <>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {pagedFields.map((field) => {
-            const prices = getFieldPrices(field);
-            return (
-              <Card key={field.id}>
-                <CardHeader>
-                  <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden mb-4 shadow-inner">
-                    <FieldImage query={field.image} />
-                  </div>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-xl">{field.name}</CardTitle>
-                      <CardDescription>Sân {field.type} người</CardDescription>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {pagedFields.map((field) => {
+              const prices = getFieldPrices(field);
+              return (
+                <Card key={field.id}>
+                  <CardHeader>
+                    <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden mb-4 shadow-inner">
+                      <FieldImage query={field.image} />
                     </div>
-                    {getStatusBadge(field.status)}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-gray-600 line-clamp-2 min-h-[40px]">{field.description}</p>
-
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-slate-700">Bảng giá:</p>
-                    {prices.length > 0 ? (
-                      <div className="bg-slate-50 p-3 rounded-lg space-y-1.5 border border-slate-100">
-                        {prices.map((price) => (
-                          <div key={price.id} className="flex justify-between text-xs items-center gap-2">
-                            <span className="text-gray-600 font-medium shrink-0">
-                              {price.startTime} - {price.endTime}
-                            </span>
-                            <span className="text-slate-400 text-[10px] truncate">
-                              ({price.applyOn === 'ALL' ? 'Cả tuần' : price.applyOn === 'WEEKDAY' ? 'T2 - T6' : 'T7 & CN'})
-                            </span>
-                            <span className="font-bold text-emerald-600 ml-auto">
-                              {price.price.toLocaleString('vi-VN')}đ/h
-                            </span>
-                          </div>
-                        ))}
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="text-xl">{field.name}</CardTitle>
+                        <CardDescription>Sân {field.type} người</CardDescription>
                       </div>
-                    ) : (
-                      <p className="text-xs text-amber-600 italic">Chưa cài đặt bảng giá</p>
-                    )}
-                  </div>
+                      {getStatusBadge(field.status)}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-gray-600 line-clamp-2 min-h-[40px]">{field.description}</p>
 
-                  <div className="space-y-2 pt-4 border-t border-slate-100">
-                    <Label className="text-xs font-semibold uppercase text-slate-500">Trạng thái sân</Label>
-                    <Select
-                      value={field.status}
-                      onValueChange={(value) => handleStatusChange(field.id, value)}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ACTIVE">Hoạt động</SelectItem>
-                        <SelectItem value="MAINTENANCE">Bảo trì</SelectItem>
-                        <SelectItem value="INACTIVE">Ngừng hoạt động</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold text-slate-700">Bảng giá:</p>
+                      {prices.length > 0 ? (
+                        <div className="bg-slate-50 p-3 rounded-lg space-y-1.5 border border-slate-100">
+                          {prices.map((price) => (
+                            <div key={price.id} className="flex justify-between text-xs items-center gap-2">
+                              <span className="text-gray-600 font-medium shrink-0">
+                                {price.startTime} - {price.endTime}
+                              </span>
+                              <span className="text-slate-400 text-[10px] truncate">
+                                ({price.applyOn === 'ALL' ? 'Cả tuần' : price.applyOn === 'WEEKDAY' ? 'T2 - T6' : 'T7 & CN'})
+                              </span>
+                              <span className="font-bold text-emerald-600 ml-auto">
+                                {price.price.toLocaleString('vi-VN')}đ/h
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-amber-600 italic">Chưa cài đặt bảng giá</p>
+                      )}
+                    </div>
 
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      className="flex-1 gap-1.5 h-9 text-[11px] font-semibold rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition-all px-2"
-                      onClick={() => handleOpenEditDialog(field)}
-                    >
-                      <Edit className="w-3.5 h-3.5" />
-                      Sửa
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="flex-1 gap-1.5 h-9 text-[11px] font-semibold rounded-lg hover:border-blue-500 hover:text-blue-600 transition-all px-2"
-                      onClick={() => handleOpenPriceDialog(field)}
-                    >
-                      <Wrench className="w-3.5 h-3.5" />
-                      Giá
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-        
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 pt-4">
-            <Button variant="outline" size="icon" className="rounded-xl border-slate-200" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                <button key={page} onClick={() => setCurrentPage(page)} className={`w-9 h-9 rounded-xl text-sm font-bold transition-all ${page === currentPage ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200' : 'text-slate-500 hover:bg-slate-100'}`}>
-                  {page}
-                </button>
-              ))}
-            </div>
-            <Button variant="outline" size="icon" className="rounded-xl border-slate-200" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>
-              <ChevronRight className="w-4 h-4" />
-            </Button>
+                    <div className="space-y-2 pt-4 border-t border-slate-100">
+                      <Label className="text-xs font-semibold uppercase text-slate-500">Trạng thái sân</Label>
+                      <Select
+                        value={field.status}
+                        onValueChange={(value) => handleStatusChange(field.id, value)}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ACTIVE">Hoạt động</SelectItem>
+                          <SelectItem value="MAINTENANCE">Bảo trì</SelectItem>
+                          <SelectItem value="INACTIVE">Ngừng hoạt động</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1 gap-1.5 h-9 text-[11px] font-semibold rounded-lg hover:border-emerald-500 hover:text-emerald-600 transition-all px-2"
+                        onClick={() => handleOpenEditDialog(field)}
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                        Sửa
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1 gap-1.5 h-9 text-[11px] font-semibold rounded-lg hover:border-blue-500 hover:text-blue-600 transition-all px-2"
+                        onClick={() => handleOpenPriceDialog(field)}
+                      >
+                        <Wrench className="w-3.5 h-3.5" />
+                        Giá
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
-        )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 pt-4">
+              <Button variant="outline" size="icon" className="rounded-xl border-slate-200" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button key={page} onClick={() => setCurrentPage(page)} className={`w-9 h-9 rounded-xl text-sm font-bold transition-all ${page === currentPage ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200' : 'text-slate-500 hover:bg-slate-100'}`}>
+                    {page}
+                  </button>
+                ))}
+              </div>
+              <Button variant="outline" size="icon" className="rounded-xl border-slate-200" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -685,7 +687,7 @@ export function FieldsPage() {
 
 function FieldImage({ query }: { query: string }) {
   const imageUrl = useUnsplash(query);
-  
+
   return (
     <div className="relative w-full h-full group">
       <ImageWithFallback

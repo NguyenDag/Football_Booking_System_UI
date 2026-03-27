@@ -49,6 +49,10 @@ export interface AdminAdvancedStatsResponse {
   totalBookings: number;
   totalRevenue: number;
   cancellationRate: number;
+  completedCount: number;
+  cancelledCount: number;
+  pendingCount: number;
+  confirmedCount: number;
   bookingsByDate: BookingsByDateDto[];
   revenueByPitch: RevenueByPitchDto[];
   monthlyRevenue: MonthlyRevenueDto[];

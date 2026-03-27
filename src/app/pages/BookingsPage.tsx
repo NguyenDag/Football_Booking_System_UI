@@ -13,12 +13,12 @@ import { Textarea } from '../components/ui/textarea';
 import { Calendar as CalendarIcon, Check, X, Filter, Search, RotateCcw } from 'lucide-react';
 import { bookingService, type BookingResponse, type BookingDetailResponse } from '../api/booking.service';
 import { pitchService, type Field } from '../api/pitch.service';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '../components/ui/select';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -78,7 +78,7 @@ export function BookingsPage() {
 
   const activeBookings = React.useMemo(() => {
     let base = allBookings;
-    
+
     if (activeTab === 'pending') {
       base = pendingBookings;
     } else if (activeTab === 'urgent') {
@@ -104,7 +104,7 @@ export function BookingsPage() {
     // Search
     const term = searchTerm.toLowerCase();
     if (term) {
-      base = base.filter(b => 
+      base = base.filter(b =>
         b.bookingId.toString().includes(term) ||
         (b.customerName && b.customerName.toLowerCase().includes(term)) ||
         (b.customerPhone && b.customerPhone.includes(term))
@@ -303,19 +303,21 @@ export function BookingsPage() {
           </div>
         )}
 
-        {canManage && (detail?.status === 'PENDING') && (
+        {canManage && (detail?.status === 'PENDING' || detail?.status === 'CONFIRMED') && (
           <div className="flex gap-3 pt-3">
-            <Button
-              size="sm"
-              className="flex-1 h-9 gap-2 font-semibold"
-              onClick={() => {
-                setSelectedBookingDetail(detail);
-                setActionDialog('confirm');
-              }}
-            >
-              <Check className="w-4 h-4" />
-              Xác nhận
-            </Button>
+            {detail?.status === 'PENDING' && (
+              <Button
+                size="sm"
+                className="flex-1 h-9 gap-2 font-semibold"
+                onClick={() => {
+                  setSelectedBookingDetail(detail);
+                  setActionDialog('confirm');
+                }}
+              >
+                <Check className="w-4 h-4" />
+                Xác nhận
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -326,11 +328,11 @@ export function BookingsPage() {
               }}
             >
               <X className="w-4 h-4" />
-              Từ chối
+              {detail?.status === 'CONFIRMED' ? 'Hủy & Hoàn tiền' : 'Từ chối'}
             </Button>
           </div>
         )}
-        
+
       </div>
     );
   };
@@ -459,16 +461,16 @@ export function BookingsPage() {
               const hrs = (date.getTime() - now.getTime()) / (1000 * 60 * 60);
               return hrs > 0 && hrs <= 2;
             }).length > 0 && (
-              <span className="ml-1.5 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full animate-pulse">
-                {pendingBookings.filter(b => {
-                  const d = b.details[0];
-                  if (!d) return false;
-                  const date = new Date(d.playDate + 'T' + d.startTime);
-                  const hrs = (date.getTime() - now.getTime()) / (1000 * 60 * 60);
-                  return hrs > 0 && hrs <= 2;
-                }).length}
-              </span>
-            )}
+                <span className="ml-1.5 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full animate-pulse">
+                  {pendingBookings.filter(b => {
+                    const d = b.details[0];
+                    if (!d) return false;
+                    const date = new Date(d.playDate + 'T' + d.startTime);
+                    const hrs = (date.getTime() - now.getTime()) / (1000 * 60 * 60);
+                    return hrs > 0 && hrs <= 2;
+                  }).length}
+                </span>
+              )}
           </TabsTrigger>
         </TabsList>
 

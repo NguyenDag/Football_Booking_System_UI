@@ -16,15 +16,24 @@ import {
   Save, 
   ArrowLeft,
   ChevronRight,
-  UserCircle
+  UserCircle,
+  Wallet,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  History,
+  CreditCard
 } from 'lucide-react';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { toast } from 'sonner';
+import { walletService, WalletDTO } from '../api/wallet.service';
+import { useEffect } from 'react';
 
 export function ProfilePage() {
   const { user, updateProfile, changePassword, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'info' | 'password'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'password' | 'wallet'>('info');
+  const [wallet, setWallet] = useState<WalletDTO | null>(null);
+  const [walletLoading, setWalletLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -82,6 +91,24 @@ export function ProfilePage() {
     }
     setLoading(false);
   };
+
+  const fetchWallet = async () => {
+    setWalletLoading(true);
+    try {
+      const data = await walletService.getMyWallet();
+      setWallet(data);
+    } catch (err: any) {
+      toast.error(err.message || 'Không thể tải thông tin ví');
+    } finally {
+      setWalletLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'wallet') {
+      fetchWallet();
+    }
+  }, [activeTab]);
 
   return (
     <div className="relative min-h-[calc(100vh-8rem)]">
@@ -157,6 +184,23 @@ export function ProfilePage() {
                 <div className="text-left">
                   <p className="font-bold text-sm">Đổi mật khẩu</p>
                   <p className={`text-xs ${activeTab === 'password' ? 'text-emerald-50' : 'text-slate-400'}`}>Tăng cường bảo mật</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('wallet')}
+                className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all duration-300 group ${
+                  activeTab === 'wallet' 
+                    ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-emerald-200 shadow-lg scale-[1.02]' 
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-emerald-600'
+                }`}
+              >
+                <div className={`p-2 rounded-xl transition-colors ${activeTab === 'wallet' ? 'bg-white/20' : 'bg-slate-100 group-hover:bg-emerald-100'}`}>
+                  <Wallet className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <p className="font-bold text-sm">Ví của tôi</p>
+                  <p className={`text-xs ${activeTab === 'wallet' ? 'text-emerald-50' : 'text-slate-400'}`}>Số dư & Giao dịch</p>
                 </div>
               </button>
             </div>
@@ -275,6 +319,127 @@ export function ProfilePage() {
                     </form>
                   </CardContent>
                 </Card>
+              ) : activeTab === 'wallet' ? (
+                <div className="space-y-6">
+                  {/* Balance Card */}
+                  <Card className="border-none shadow-2xl rounded-3xl overflow-hidden bg-gradient-to-br from-emerald-600 to-emerald-800 text-white relative">
+                    <div className="absolute top-0 right-0 p-8 opacity-10">
+                      <Wallet className="w-32 h-32" />
+                    </div>
+                    <CardHeader>
+                      <CardTitle className="text-emerald-100 font-medium">Số dư khả dụng</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pb-8">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-5xl font-extrabold tracking-tight">
+                          {wallet?.balance.toLocaleString('vi-VN')}
+                        </span>
+                        <span className="text-2xl font-bold text-emerald-200">VNĐ</span>
+                      </div>
+                      <div className="mt-8 flex gap-4">
+                        <div className="px-4 py-2 bg-white/20 backdrop-blur-md rounded-xl flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-emerald-300" />
+                          <span className="text-sm font-medium">Tài khoản đã xác thực</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Transactions Table */}
+                  <Card className="border-none shadow-2xl rounded-3xl overflow-hidden bg-white/80 backdrop-blur-md">
+                    <CardHeader className="border-b border-slate-100 flex flex-row items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-slate-100 rounded-2xl">
+                          <History className="w-6 h-6 text-slate-600" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-xl font-bold text-slate-900">Lịch sử giao dịch</CardTitle>
+                          <CardDescription>20 giao dịch gần đây nhất</CardDescription>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={fetchWallet} 
+                        disabled={walletLoading}
+                        className="rounded-xl hover:bg-slate-100"
+                      >
+                        Làm mới
+                      </Button>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      {walletLoading ? (
+                        <div className="p-12 text-center">
+                          <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                          <p className="text-slate-500">Đang tải giao dịch...</p>
+                        </div>
+                      ) : wallet?.recentTransactions.length === 0 ? (
+                        <div className="p-12 text-center">
+                          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <AlertCircle className="w-8 h-8 text-slate-300" />
+                          </div>
+                          <p className="text-slate-500 font-medium">Chưa có giao dịch nào</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50/50">
+                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Loại</th>
+                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Nội dung</th>
+                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Số tiền</th>
+                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Thời gian</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {wallet?.recentTransactions.map((t) => (
+                                <tr key={t.transactionId} className="hover:bg-slate-50/50 transition-colors">
+                                  <td className="px-6 py-4">
+                                    <div className="flex items-center gap-2">
+                                      {t.direction === 'CREDIT' ? (
+                                        <ArrowUpCircle className="w-4 h-4 text-emerald-500" />
+                                      ) : (
+                                        <ArrowDownCircle className="w-4 h-4 text-red-500" />
+                                      )}
+                                      <span className={`text-sm font-bold ${
+                                        t.transactionType === 'TOP_UP' ? 'text-emerald-600' : 
+                                        t.transactionType === 'BOOKING_PAYMENT' ? 'text-blue-600' :
+                                        t.transactionType === 'REFUND' ? 'text-purple-600' : 'text-slate-600'
+                                      }`}>
+                                        {t.transactionType === 'TOP_UP' ? 'Nạp tiền' : 
+                                         t.transactionType === 'BOOKING_PAYMENT' ? 'Thanh toán' :
+                                         t.transactionType === 'REFUND' ? 'Hoàn tiền' : t.transactionType}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <p className="text-sm text-slate-600 line-clamp-1">{t.description}</p>
+                                    {t.bookingId && (
+                                      <p className="text-[10px] text-slate-400 font-medium uppercase mt-1">Đơn hàng DH{t.bookingId}</p>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <span className={`text-sm font-bold ${t.direction === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                      {t.direction === 'CREDIT' ? '+' : '-'}{t.amount.toLocaleString('vi-VN')}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <p className="text-xs text-slate-500">
+                                      {new Date(t.createdAt).toLocaleDateString('vi-VN')}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400">
+                                      {new Date(t.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
               ) : (
                 <Card className="border-none shadow-2xl rounded-3xl overflow-hidden bg-white/80 backdrop-blur-md">
                   <CardHeader className="bg-gradient-to-r from-purple-50/50 to-white pb-8 border-b border-slate-100">
